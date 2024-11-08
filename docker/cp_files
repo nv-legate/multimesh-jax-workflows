@@ -1,0 +1,8 @@
+#! /usr/bin/env bash
+
+IFS=$'\n'       # make newlines the only separator
+set -f          # disable globbing
+for i in $(cat < "files"); do
+ cp ../../legate.jax/docker/$i .
+done
+
