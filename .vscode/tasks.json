@@ -1,0 +1,236 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "New Workspace in Folder",
+            "type": "shell",
+            "group": "build",
+            "command": "${workspaceFolder}/bin/new-workspace",
+            "options": {
+              "cwd": "${workspaceFolder}/workspaces",
+              "env": {}
+            },
+            "args" : [
+              "${input:workspace_folder}",
+              "${workspaceFolder}"
+            ]
+        },
+        {
+            "label": "Start Dask Workers",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${workspaceFolder}/bin/start-dask.py",
+                "--remote",
+                "${input:remote}"
+            ]
+        },
+        {
+            "label": "Start Devcontainer",
+            "type": "shell",
+            "group": "build",
+            "command": "./start-devcontainer.sh",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${input:dev_image}",
+                "${input:container_name}"
+            ]
+        },
+        {
+            "label": "Make Devcontainer Mount Folder",
+            "type": "shell",
+            "group": "build",
+            "command": "mkdir",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "-p",
+                "mount"
+            ]
+        },
+        {
+            "label": "Launch Devcontainer",
+            "type": "shell",
+            "group": "build",
+            "dependsOn" : ["Make Devcontainer Mount Folder", "Start Devcontainer"],
+            "dependsOrder": "sequence"
+        },
+        {
+            "label": "Build and Upload Maxtext Snapshot",
+            "type": "shell",
+            "group": "build",
+            "command": "${command:python.interpreterPath}",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${workspaceFolder}/docker/build.py",
+                "--tag",
+                "${input:container_name}",
+                "--upload",
+                "--framework",
+                "maxtext",
+                "--save_remote",
+                "--remote",
+                "${input:remote}"
+            ]
+        },
+        {
+            "label": "Commit and Upload Devcontainer",
+            "type": "shell",
+            "group": "build",
+            "command": "./build.py",
+            "options": {
+              "cwd": "${workspaceFolder}/workspaces/${input:workspace_folder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "--commit",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--tag",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--upload"
+            ]
+        },
+        {
+            "label": "Commit and Test Devcontainer",
+            "type": "shell",
+            "group": "test",
+            "command": "${command:python.interpreterPath}",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${workspaceFolder}/docker/build.py",
+                "--commit",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--tag",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--upload",
+                "--validate",
+                "medium",
+                "--remote",
+                "${input:remote}"
+            ]
+        },
+        {
+            "label": "Commit and Test Devcontainer #2",
+            "type": "shell",
+            "group": "test",
+            "command": "${command:python.interpreterPath}",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${workspaceFolder}/docker/build.py",
+                "--commit",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--tag",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--upload",
+                "--validate",
+                "medium",
+                "--remote",
+                "${input:remote}"
+            ]
+        },
+        {
+            "label": "Commit and Test Devcontainer #3",
+            "type": "shell",
+            "group": "test",
+            "command": "${command:python.interpreterPath}",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${workspaceFolder}/docker/build.py",
+                "--commit",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--tag",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--upload",
+                "--validate",
+                "medium",
+                "--remote",
+                "${input:remote}"
+            ]
+        },
+        {
+            "label": "Build and Validate Tag",
+            "type": "shell",
+            "group": "test",
+            "command": "${command:python.interpreterPath}",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${workspaceFolder}/docker/build.py",
+                "--validate",
+                "medium",
+                "--tag",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--remote",
+                "${input:remote}"
+            ]
+        },
+        {
+            "label": "Validate Tag",
+            "type": "shell",
+            "group": "test",
+            "command": "${command:python.interpreterPath}",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${workspaceFolder}/docker/build.py",
+                "--validate",
+                "medium",
+                "--tag",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--remote",
+                "${input:remote}"
+            ]
+        }
+    ],
+    "inputs": [
+        {
+            "id": "dev_image",
+            "description": "The image name to run",
+            "default": "multimesh-jax-dev:maxtext-devel",
+            "type": "promptString"
+        },
+        {
+            "id": "container_name",
+            "description": "The container name/tag",
+            "type": "promptString"
+        },
+        {
+            "id": "workspace_folder",
+            "description": "The name of the folder where to open a new workspace",
+            "type": "promptString"
+        },
+        {
+            "id": "remote",
+            "description": "The remote server to run on",
+            "default": "eos",
+            "type": "promptString"
+        }
+    ]
+}

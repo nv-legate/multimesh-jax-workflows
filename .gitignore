@@ -1,0 +1,4 @@
+docker/target/*
+docker/cache/*
+maxtext/dump/*
+maxtext/target/*

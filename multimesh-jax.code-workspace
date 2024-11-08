@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": "docker",
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"docker/cache/**": true
+		},
+		"files.watcherExclude": {
+			"**/docker/cache/**": true
+		}
+	}
+}

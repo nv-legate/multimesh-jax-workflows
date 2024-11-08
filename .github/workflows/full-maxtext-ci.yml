@@ -1,0 +1,16 @@
+on:
+  push:
+    branches:
+      - "pull-request/[0-9]+"
+      - "branch-*"
+      - "main"
+      - "sandeepd/*"
+
+jobs:
+  build:
+    uses: ./.github/workflows/base-workflow.yml
+    with:
+      tag: maxtext
+      base_image: ghcr.io/nv-legate/multimesh-jax-dev:devcontainer_base
+      stage: reinstall_custom_jax
+    secrets: inherit

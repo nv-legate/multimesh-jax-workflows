@@ -1,0 +1,11 @@
+#! /usr/bin/env bash
+
+name=$1
+if [ -z "$name" ]; then
+  echo "Error: Must give a workspace name" >&2
+  exit 1
+fi
+branch=`git branch --show-current`
+git clone -b $branch $2 $name
+code --new-window $name
+
