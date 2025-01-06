@@ -731,6 +731,7 @@ argv = [
     f"--fdl.NUM_HEADS={args.num_heads}",
     f"--fdl.MODEL_DIMS={args.model_dims}",
     f"--fdl.HIDDEN_DIMS={hidden_dims}",
+    f"--fdl.MAX_SEQ_LEN={args.sequence_length}",
     f"--fdl.DIMS_PER_HEAD={dims_per_head}",
     f"--fdl_config={args.paxml_config}",
     f"--fdl.FPROP_DTYPE='{args.precision}'",

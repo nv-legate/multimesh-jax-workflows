@@ -386,7 +386,7 @@ index 2ff2926e..7b6afaa6 100644
        num_stages = int(raw_keys["ici_pipeline_parallelism"] * raw_keys["dcn_pipeline_parallelism"])
        if raw_keys["num_pipeline_repeats"] == -1:
 diff --git a/MaxText/train.py b/MaxText/train.py
-index 182dd75e..e27462f5 100644
+index 182dd75e..013cd5a5 100644
 --- a/MaxText/train.py
 +++ b/MaxText/train.py
 @@ -26,7 +26,7 @@ import sys
@@ -414,6 +414,15 @@ index 182dd75e..e27462f5 100644
 
  # pylint: disable=too-many-positional-arguments
 
+@@ -89,7 +91,7 @@ def validate_train_config(config):
+
+ def get_first_step(state):
+   with jax.spmd_mode("allow_all"):
+-    return int(state.step)
++    return 0 #int(state.step)
+
+
+ def load_next_batch(train_iter, example_batch, config):
 @@ -172,10 +174,10 @@ def write_metrics_to_tensorboard(writer, metrics, step, config, is_training=True
            f"loss: {metrics['scalar']['learning/loss']:.3f}"
        )
