@@ -16,18 +16,29 @@ export TF_NEED_CUTENSOR=1
 export TF_NEED_TENSORRT=0
 export TF_CUDA_PATHS=/usr,/usr/local/cuda
 export TF_CUDNN_PATHS=/usr/lib/$(uname -p)-linux-gnu
-export TF_CUDA_VERSION=$(ls /usr/local/cuda/lib64/libcudart.so.*.*.* | cut -d . -f 3-4)
+export TF_CUDA_VERSION=$(ls /usr/local/cuda/lib64/libcudart.so.*.*.* | cut -d . -f 3-5 | head -c 6)
 export TF_CUBLAS_VERSION=$(ls /usr/local/cuda/lib64/libcublas.so.*.*.* | cut -d . -f 3)
-export TF_CUDNN_VERSION=$(echo "${NV_CUDNN_VERSION}" | cut -d . -f 1)
+export TF_CUDA_MAJOR_VERSION=$(ls /usr/local/cuda/lib64/libcudart.so.*.*.* | cut -d . -f 3)
+export TF_CUDNN_VERSION=$(echo "${NV_CUDNN_VERSION}" | cut -d . -f 1-3)
+export TF_CUDNN_MAJOR_VERSION=$(echo "${NV_CUDNN_VERSION}" | cut -d . -f 1)
 export TF_NCCL_VERSION=$(echo "${NCCL_VERSION}" | cut -d . -f 1)
 
+cat > .bazelrc.user << EOF
+build:cuda --repo_env=LOCAL_CUDA_PATH="/usr/local/cuda"
+build:cuda --repo_env=LOCAL_CUDNN_PATH="/opt/nvidia/cudnn"
+build:cuda --repo_env=LOCAL_NCCL_PATH="/opt/nvidia/nccl"
+EOF
+
 conda run --no-capture-out -n legere python build/build.py \
-  --bazel_options=--override_repository=xla=/opt/xla --bazel_startup_options=--batch \
+  --bazel_startup_options=--batch \
+  --bazel_options=--override_repository=xla=/opt/xla \
   --bazel_options=--remote_cache=${BAZEL_CACHE} \
-  --cuda_path=$TF_CUDA_PATHS \
-  --cudnn_path=$TF_CUDNN_PATHS \
+  --use_clang \
+  --clang_path=/usr/lib/llvm-17/bin/clang \
+  --build_gpu_plugin \
   --cuda_version=$TF_CUDA_VERSION \
   --cudnn_version=$TF_CUDNN_VERSION \
+  --gpu_plugin_cuda_version=$TF_CUDA_MAJOR_VERSION \
   --cuda_compute_capabilities=$TF_CUDA_COMPUTE_CAPABILITIES \
   --enable_cuda=true \
   --enable_nccl=true

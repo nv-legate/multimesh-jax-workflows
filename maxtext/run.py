@@ -2,12 +2,13 @@
 
 import argparse
 import glob
-import math
 import os
 import re
 import runpy
+import subprocess as sp
 import sys
 from pathlib import Path
+
 import yaml
 
 try:
@@ -16,12 +17,11 @@ except ImportError:
     pass
 
 
-
 parser = argparse.ArgumentParser(allow_abbrev=False)
 
 
-## LEGION parameters
-################################################################
+# LEGION parameters
+############################################
 legion = parser.add_argument_group("Legion")
 legion.add_argument(
     "--nodes",
@@ -67,12 +67,6 @@ legion.add_argument(
     help="The amount in GB of frame-buffer memory to reserve for eager allocations",  # noqa: E501
 )
 legion.add_argument(
-    "--no-physical-tracing",
-    action="store_true",
-    default=False,
-    help="Whether to only perform logical tracing, not full physical tracing",
-)
-legion.add_argument(
     "--gpus",
     type=int,
     default=8,
@@ -92,21 +86,19 @@ legion.add_argument(
 )
 
 
-
-
-## XLA parameters
-################################################################
+# XLA parameters
+######################################
 xla = parser.add_argument_group("XLA")
 xla.add_argument(
     "--debug-nccl",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to print NCCL debug information",
 )
 xla.add_argument(
     "--use-nccl-comm-split",
-    action="store_true",
-    default=False,
+    action=argparse.BooleanOptionalAction,
+    default=True,
     help="Whether to use comm split to create communicators",
 )
 xla.add_argument(
@@ -116,28 +108,39 @@ xla.add_argument(
     help="Specify the cutoff in MiB for activating collective matul/windowed einsum tensor parallelism",  # noqa: E501
 )
 xla.add_argument(
-    "--no-latency-hiding-scheduler", dest="latency_hiding_scheduler", action="store_false"
+    "--latency-hiding-scheduler",
+    action=argparse.BooleanOptionalAction,
+    default=True,
 )
 xla.add_argument(
-    "--no-xla-pipelining", dest="xla_pipelining", action="store_false"
+    "--xla-pipelining",
+    action=argparse.BooleanOptionalAction,
+    default=True,
 )
 xla.add_argument(
-    "--no-xla-loop-buffering", dest="xla_loop_buffering", action="store_false"
+    "--xla-loop-buffering",
+    action=argparse.BooleanOptionalAction,
+    default=True,
 )
 xla.add_argument(
-    "--xla-ar-threshold", type=int, default=4294967296,
+    "--xla-ar-threshold",
+    type=int,
+    default=4294967296,
 )
 xla.add_argument(
-    "--xla-ag-threshold", type=int, default=4294967296,
+    "--xla-ag-threshold",
+    type=int,
+    default=4294967296,
 )
 xla.add_argument(
-    "--xla-rs-threshold", type=int, default=33554432,
+    "--xla-rs-threshold",
+    type=int,
+    default=33554432,
 )
 
 
-
-## XLA parameters
-################################################################
+# XLA parameters
+####################################################
 legate_jax = parser.add_argument_group("Legate-Jax")
 legate_jax.add_argument(
     "--backend",
@@ -152,11 +155,29 @@ legate_jax.add_argument(
     default=True,
 )
 legate_jax.add_argument(
+    "--host-offload-min-reuse-distance",
+    type=int,
+    default=0,
+    help="The minimum reuse distance to trigger host-offload of intermediates. 0 indicates no offloading",  # noqa: E501
+)
+legate_jax.add_argument(
     "--debug",
     type=str,
     default=None,
     choices=["info", "debug", "spew"],
     help="The debug level",
+)
+legate_jax.add_argument(
+    "--only-fuse-loop-tasks",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Only fuse tasks inside loops",
+)
+legate_jax.add_argument(
+    "--fuse-tasks",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Only fuse tasks inside loops",
 )
 xla_debug_levels = {
     None: 0,
@@ -195,21 +216,9 @@ legate_jax.add_argument(
     help="The amount of interleaving (circular scheduling)",
 )
 legate_jax.add_argument(
-    "--distribute-embeddings",
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help="Whether to distribute embeddings computation across all GPUs or include in Layer 0",  # noqa: E501
-)
-legate_jax.add_argument(
     "--sequence-parallel",
-    action="store_true",
-    dest="sequence_parallel",
-    help="Whether to use sequence parallelism",  # noqa: E501
-)
-legate_jax.add_argument(
-    "--no-sequence-parallel",
-    action="store_false",
-    dest="sequence_parallel",
+    action=argparse.BooleanOptionalAction,
+    default=True,
     help="Whether to use sequence parallelism",  # noqa: E501
 )
 legate_jax.add_argument(
@@ -232,7 +241,7 @@ legate_jax.add_argument(
 )
 legate_jax.add_argument(
     "--dump-only",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to only dump HLO modules without full execution",
 )
@@ -244,7 +253,7 @@ legate_jax.add_argument(
 )
 legate_jax.add_argument(
     "--dump-all-passes",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to dump all intermediate HLO modules",
 )
@@ -256,6 +265,12 @@ legate_jax.add_argument(
     help="Replicate all smaller than batch*squence_length",
 )
 
+legate_jax.add_argument(
+    "--load-balance-embeddings",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Whether to rotate microbatches across different submeshes for load-balancing",  # noqa: E501
+)
 
 maxtext = parser.add_argument_group("MaxText")
 
@@ -326,7 +341,7 @@ maxtext.add_argument(
     "--attention",
     type=str,
     default=None,
-    choices=['autoselected', 'dot_product', 'flash', 'cudnn_flash_te'],
+    choices=["autoselected", "dot_product", "flash", "cudnn_flash_te"],
     help="Override attention with one of valid attention types",
 )
 
@@ -334,7 +349,7 @@ maxtext.add_argument(
     "--attention-type",
     type=str,
     default=None,
-    choices=['global', 'local_sliding'],
+    choices=["global", "local_sliding"],
     help="Override attention-type  with one valid types",
 )
 
@@ -342,7 +357,17 @@ maxtext.add_argument(
     "--remat",
     type=str,
     default=None,
-    choices=['minimal', 'minimal_flash', 'save_dot_except_mlpwi', 'save_dot_except_mlp', 'save_qkv_proj', 'qkv_proj_offloaded', 'minimal_offloaded', 'save_out_proj', 'full'],
+    choices=[
+        "minimal",
+        "minimal_flash",
+        "save_dot_except_mlpwi",
+        "save_dot_except_mlp",
+        "save_qkv_proj",
+        "qkv_proj_offloaded",
+        "minimal_offloaded",
+        "save_out_proj",
+        "full",
+    ],
     help="Override remat_policy",
 )
 
@@ -372,19 +397,19 @@ maxtext.add_argument(
     dest="scan_layers",
     default=False,
     action=argparse.BooleanOptionalAction,
-    help="Whether to wrap repeated layers in a while-loop (True) or unroll (False)",
+    help="Whether to wrap repeated layers in a while-loop (True) or unroll (False)",  # noqa: E501
 )
 
-#####################################################################
-args = parser.parse_args()
+############################################
+args, realm_argv = parser.parse_known_args()
 
 if args.gpus > 0:
     if args.nodes > 1:
-        hardware = 'gpu_multiprocess'
+        hardware = "gpu_multiprocess"
     else:
-        hardware = 'gpu'
+        hardware = "gpu"
 else:
-    hardware = 'cpu'
+    hardware = "cpu"
 
 if args.dump_only:
     # forces a debug mode on the run where the HLO module
@@ -402,8 +427,8 @@ if args.dump_only:
         )
 
 
-## setup environment variables
-#####################################################################
+# setup environment variables
+#############################
 vmodule = [
     "legate_pjrt_buffer",
     "hlo_partition",
@@ -446,7 +471,7 @@ xla_flags = [
     "--xla_disable_hlo_passes=rematerialization",
     f"--xla_gpu_enable_nccl_comm_splitting={str(args.use_nccl_comm_split).lower()}",  # noqa: E501
     f"--xla_force_host_platform_device_count={args.cpus}",
-    f"--xla_gpu_enable_latency_hiding_scheduler={args.latency_hiding_scheduler}",
+    f"--xla_gpu_enable_latency_hiding_scheduler={args.latency_hiding_scheduler}",  # noqa: E501
     "--xla_gpu_enable_triton_gemm=false",
     "--xla_gpu_graph_level=0",
 ]
@@ -456,35 +481,34 @@ xla_flags = [
 if args.backend == "legate":
     xla_flags.extend(
         [
-            f"--xla_gpu_all_reduce_combine_threshold_bytes={args.xla_ar_threshold}",
-            f"--xla_gpu_all_gather_combine_threshold_bytes={args.xla_ag_threshold}",
-            f"--xla_gpu_reduce_scatter_combine_threshold_bytes={args.xla_rs_threshold}",
+            f"--xla_gpu_all_reduce_combine_threshold_bytes={args.xla_ar_threshold}",  # noqa: E501
+            f"--xla_gpu_all_gather_combine_threshold_bytes={args.xla_ag_threshold}",  # noqa: E501
+            f"--xla_gpu_reduce_scatter_combine_threshold_bytes={args.xla_rs_threshold}",  # noqa: E501
             f"--xla_gpu_enable_pipelined_all_gather={args.xla_pipelining}",
             f"--xla_gpu_enable_pipelined_reduce_scatter={args.xla_pipelining}",
             f"--xla_gpu_enable_pipelined_all_reduce={args.xla_pipelining}",
-            f"--xla_gpu_enable_while_loop_double_buffering={args.xla_loop_buffering}",
+            f"--xla_gpu_enable_while_loop_double_buffering={args.xla_loop_buffering}",  # noqa: E501
             "--xla_gpu_enable_all_gather_combine_by_dim=false",
             "--xla_gpu_enable_reduce_scatter_combine_by_dim=false",
             # these are specific to legate
             "--xla_gpu_enable_highest_priority_async_stream=true",
             "--xla_gpu_enable_triton_softmax_fusion=false",
-            #"--xla_gpu_all_reduce_combine_threshold_bytes=51200",
-            #"--xla_dump_hlo_pass_re=.*",
+            # "--xla_gpu_all_reduce_combine_threshold_bytes=51200",
+            # "--xla_dump_hlo_pass_re=.*",
         ]
     )
 else:
     xla_flags.extend(
         [
-            f"--xla_gpu_all_reduce_combine_threshold_bytes={args.xla_ar_threshold}",
-            f"--xla_gpu_all_gather_combine_threshold_bytes={args.xla_ag_threshold}",
-            f"--xla_gpu_reduce_scatter_combine_threshold_bytes={args.xla_rs_threshold}",
+            f"--xla_gpu_all_reduce_combine_threshold_bytes={args.xla_ar_threshold}",  # noqa: E501
+            f"--xla_gpu_all_gather_combine_threshold_bytes={args.xla_ag_threshold}",  # noqa: E501
+            f"--xla_gpu_reduce_scatter_combine_threshold_bytes={args.xla_rs_threshold}",  # noqa: E501
             f"--xla_gpu_enable_pipelined_all_gather={args.xla_pipelining}",
             f"--xla_gpu_enable_pipelined_reduce_scatter={args.xla_pipelining}",
             f"--xla_gpu_enable_pipelined_all_reduce={args.xla_pipelining}",
-            f"--xla_gpu_enable_while_loop_double_buffering={args.xla_loop_buffering}",
+            f"--xla_gpu_enable_while_loop_double_buffering={args.xla_loop_buffering}",  # noqa: E501
             "--xla_gpu_enable_all_gather_combine_by_dim=false",
             "--xla_gpu_enable_reduce_scatter_combine_by_dim=false",
-            ## added
             "--xla_gpu_enable_triton_softmax_fusion=false",
         ]
     )
@@ -547,15 +571,6 @@ base_num_decoder_layers = args.num_layers
 layers_per_stage = base_num_decoder_layers // num_stages
 layers_per_interleave = base_num_decoder_layers // args.interleave
 
-
-#
-if args.distribute_embeddings:
-    logits_num_devices = total_devices
-    embeddings_num_devices = total_devices
-else:
-    logits_num_devices = transformer_num_devices
-    embeddings_num_devices = transformer_num_devices
-
 if batch_size % total_devices:
     raise ValueError(
         f"No support for partial batches, gpus={total_devices} "
@@ -565,9 +580,6 @@ if batch_size % total_devices:
 
 if args.pp > 1:
     print(f"Pipeline parallelism with pp = {args.pp} enabled")
-
-#if args.model_name is not None and any(args.num_layers, args.remat, args.attention, args.sequence_length):
-#  raise Exception("cannot specify both --model-name and override model parameters")
 
 print(f"config = {args.maxtext_config}")
 print(f"steps= {args.num_steps}")
@@ -579,16 +591,13 @@ print(f"devices_per_stage = {devices_per_stage}")
 print(f"transformer_num_devices = {transformer_num_devices}")
 print(f"num_stages_per_interleave = {num_stages_per_interleave}")
 print(f"num_stages = {num_stages}")
-print(f"logits_num_devices = {logits_num_devices}")
-print(f"embeddings_num_devices = {embeddings_num_devices}")
 print(f"batch_size = {batch_size}")
 print(f"mb_size = {mb_size}")
 
 
-
 for key, val in env.items():
     os.environ[key] = str(val)
-    print(f'env {key}={val}')
+    print(f"env {key}={val}")
 
 sys.path.append("/opt/maxtext/MaxText/")
 
@@ -605,11 +614,10 @@ if args.backend == "legate":
         network=args.network,
         debug=args.debug,
         profile=args.profile,
+        realm_argv=realm_argv,
     )
-  
 
     devices = list(range(total_devices))
-    embeddings_device_axes = ["x", "y", "z"] 
 
     transformer_axes = [
         ("data", "x"),
@@ -619,8 +627,8 @@ if args.backend == "legate":
         ("sequence", "z"),
         ("tensor", "z"),
         ("autoregressive", "z"),
+        ("data", "z"),
     ]
-
 
     transformer_x_dim = args.dp
     transformer_y_dim = args.fsdp
@@ -631,32 +639,32 @@ if args.backend == "legate":
         transformer_z_dim,
     ]
 
-
-    embeddings_axes = transformer_axes
-    embeddings_mesh = transformer_mesh
-    # the embeddings have a few extra things, make sure arrays
-    # are fully shared over the replica/data dimension
-    embeddings_axes.append(("data", "z"))
-
-
+    if args.load_balance_embeddings:
+        loop_dependent_submesh_size = transformer_num_devices
+        num_devices_for_all_loops = total_devices
+    else:
+        loop_dependent_submesh_size = None
+        num_devices_for_all_loops = transformer_num_devices
 
     # register tasks
-    from legate.jax import register_task
     import train
+    from legate.jax import register_task
 
-    if args.pp == 1:
+    if args.pp == 1 and mb_size == batch_size:
         # just default transformer parallelism
         register_task(
             "default",
-            devices=devices[: transformer_num_devices],
+            devices=devices[:transformer_num_devices],
             dims=transformer_mesh,
-            device_axes=embeddings_device_axes,
+            device_axes=["x", "y", "z"],
             logical_axes=transformer_axes,
         )
-    else: # pp > 1
-
-        train.set_mb_config(mb_size, args.schedule, num_stages, args.interleave)
+    else:  # pp > 1 or microbatching
+        train.set_mb_config(
+            mb_size, args.schedule, num_stages, args.interleave
+        )
         layer_regex = re.compile(r"layers_(\d+)")
+
         def compute_devices(name: str):
             layer = int(layer_regex.search(name).groups()[0])
             if layers_per_interleave is not None:
@@ -665,16 +673,7 @@ if args.backend == "legate":
             stage = layer // layers_per_stage
             offset = transformer_num_devices * stage
             stop = offset + transformer_num_devices
-            print(f'MFR: name = {name}, layer = {layer},  offset = {offset}, stop = {stop}')
-            sys.stdout.flush()
-            sys.stderr.flush()
-
             return list(range(offset, stop))
-
-        if False:
-            fusion_color = 42
-        else:
-            fusion_color = 0
 
         register_task(
             r"(layers_\d+)",
@@ -682,79 +681,57 @@ if args.backend == "legate":
             dims=transformer_mesh,
             device_axes=["x", "y", "z"],
             logical_axes=transformer_axes,
-            fusion_color=fusion_color,
         )
 
-        register_task(
-            "(token_embedder).*",
-            devices=devices[: embeddings_num_devices],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-        )
-        register_task(
-            "(emb_lookup).*",
-            devices=devices[: embeddings_num_devices],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-        )
-        register_task(
-            "(position_emb).*",
-            devices=devices[: embeddings_num_devices],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-        )
+        first_layer_devices = devices[:num_devices_for_all_loops]
+        last_layer_devices = devices[-num_devices_for_all_loops:]
 
-        register_task(
-            "(decoder_norm).*",
-            devices=devices[-logits_num_devices :],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-        )
-        register_task(
-            "(final_ln).*",
-            devices=devices[-logits_num_devices :],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-        )
+        layer_meshes = {
+            "(emb_lookup).*": (
+                first_layer_devices,
+                loop_dependent_submesh_size,
+                False,
+            ),
+            "(position_emb).*": (
+                first_layer_devices,
+                loop_dependent_submesh_size,
+                False,
+            ),
+            "(decoder_norm).*": (
+                last_layer_devices,
+                loop_dependent_submesh_size,
+                True,
+            ),
+            "(compute_loss).*": (
+                last_layer_devices,
+                loop_dependent_submesh_size,
+                True,
+            ),
+            "(final_ln).*": (
+                last_layer_devices,
+                loop_dependent_submesh_size,
+                True,
+            ),
+            "default": (devices[:transformer_num_devices], None, False),
+        }
 
-        register_task(
-            "(compute_loss).*",
-            devices=devices[-logits_num_devices :],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-        )
+        for layer, (
+            devices,
+            loop_submesh_size,
+            submesh_rotation,
+        ) in layer_meshes.items():
+            register_task(
+                layer,
+                devices=devices,
+                dims=transformer_mesh,
+                device_axes=["x", "y", "z"],
+                logical_axes=transformer_axes,
+                loop_submesh_size=loop_submesh_size,
+                loop_submesh_reverse=submesh_rotation,
+            )
 
-        register_task(
-            "(logits_dense).*",
-            devices=devices[-logits_num_devices :],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-        )
-        
-        #register_task(
-        #    "default",
-        #    devices=devices[: embeddings_num_devices],
-        #    dims=embeddings_mesh,
-        #    device_axes=embeddings_device_axes,
-        #    logical_axes=embeddings_axes,
-        #)
-       
-        register_task(
-            "default",
-            devices=devices,
-            dims=[len(devices), 1, 1],
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-        )
+import maxtext_utils as mu  # noqa: E402 must come after legate init
 
-import maxtext_utils as mu
 maxtext_base = Path(mu.__file__).parent
 
 config = args.maxtext_config or maxtext_base / "configs" / "base.yml"
@@ -765,7 +742,6 @@ with open(config) as stream:
     keys.sort()
     for name in keys:
         print(name, model_yaml[name])
-    #sys.exit()
 
 argv = [
     "this",
@@ -804,8 +780,25 @@ if args.num_heads is not None:
 
 argv.append(f"hardware={hardware}")
 
+# parallelism has to be split betweeen the ICI and DCN
+# explicitly for maxtext
+num_local_devices = len(
+    sp.check_output(
+        ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"]
+    )
+    .decode("utf-8")
+    .splitlines()
+)
+if args.gpus == 0 or num_local_devices == 0:
+    num_local_devices = args.cpus
+total_nodes = total_devices // num_local_devices
+dcn_pp = total_nodes
+ici_pp = args.pp // total_nodes
+
 argv.append(f"ici_data_parallelism={args.dp}")
-argv.append(f"ici_tensor_parallelism={args.tp*args.pp}")
+argv.append(f"ici_tensor_parallelism={args.tp}")
+argv.append(f"ici_pipeline_parallelism={ici_pp}")
+argv.append(f"dcn_pipeline_parallelism={dcn_pp}")
 argv.append(f"ici_fsdp_parallelism={args.fsdp}")
 
 # optional maxtext args/overrides
@@ -820,14 +813,23 @@ if args.attention_type:
 if args.remat:
     argv.append(f"remat_policy={args.remat}")
 if args.compile_topology_num_slices:
-    argv.append(f"compile_topology_num_slices={args.compile_topology_num_slices}")
+    argv.append(
+        f"compile_topology_num_slices={args.compile_topology_num_slices}"
+    )
 
 
 # always enable recomputation
-with legate.jax.enable_recomputation(True):
+with legate.jax.context(
+    enable_recomputation=True,
+    host_offload_min_reuse_distance=args.host_offload_min_reuse_distance,
+    only_fuse_loop_tasks=args.only_fuse_loop_tasks,
+    enable_task_fusion=args.fuse_tasks,
+):
     if args.replicate_small_params:
         if args.sequence_length is None:
-            raise Exception("cannot set small parameter replication threshold without --sequence-length")
+            raise Exception(
+                "cannot set small parameter replication threshold without --sequence-length"  # noqa: E501
+            )
 
         legate.jax.replicate_parameters_smaller_than_num_elements(
             batch_size * args.sequence_length
@@ -835,13 +837,16 @@ with legate.jax.enable_recomputation(True):
 
     if args.hlo is None:
         import jaxlib
+
         sys.argv = argv
         try:
             if args.autoshard:
                 # invoke directly to preserve microbatch settings
                 train.main(argv)
             else:
-                runpy.run_path("/opt/maxtext/MaxText/train.py", run_name="__main__")
+                runpy.run_path(
+                    "/opt/maxtext/MaxText/train.py", run_name="__main__"
+                )
         except jaxlib.xla_extension.XlaRuntimeError as e:
             need_throw = True
             if args.dump_only:
@@ -872,4 +877,3 @@ with legate.jax.enable_recomputation(True):
             platform=platform,
             device_mem_gb=args.fbmem,
         )
-

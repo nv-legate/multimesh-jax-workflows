@@ -510,7 +510,7 @@ index 5f173fd..3566142 100644
      return jax.checkpoint_policies.save_only_these_names(
          'combined_qkv_proj', 'out_proj'
 diff --git a/praxis/layers/embedding_softmax.py b/praxis/layers/embedding_softmax.py
-index c41ef48..08160ae 100644
+index c41ef48..cef007c 100644
 --- a/praxis/layers/embedding_softmax.py
 +++ b/praxis/layers/embedding_softmax.py
 @@ -320,14 +320,22 @@ class FullSoftmax(base_layer.BaseLayer):
@@ -529,7 +529,7 @@ index c41ef48..08160ae 100644
      )
 -    total_weight = jnp.sum(class_weights, dtype=jnp.float32)
 +
-+    avg_batch_xent = per_batch_xent / per_batch_weight
++    avg_batch_xent = per_batch_xent #/ per_batch_weight
 +    avg_xent = jnp.sum(avg_batch_xent)
 +    total_xent = jnp.sum(per_batch_xent)
 +    total_weight = jnp.sum(per_batch_weight)
@@ -584,6 +584,31 @@ index f66d143..d1effc4 100644
    )
    num_blocks = num_transformer_layers
  
+diff --git a/praxis/layers/models.py b/praxis/layers/models.py
+index 7f5b716..b5683da 100644
+--- a/praxis/layers/models.py
++++ b/praxis/layers/models.py
+@@ -128,9 +128,8 @@ def compute_xent_loss_helper(
+     )
+   predicted_labels = predictions.per_example_argmax.astype(labels.dtype)
+   num_preds = predictions.total_weight
+-  mean_acc = jnp.sum((labels == predicted_labels) * weights) / jnp.maximum(
+-      num_preds, 1
+-  )
++  mean_acc = jnp.sum((labels == predicted_labels) * weights)
++  #/ jnp.maximum(num_preds, 1)
+   metric_weight = jnp.array(num_preds, predictions.avg_xent.dtype)
+
+   if hasattr(predictions, 'avg_xent_weight'):
+@@ -169,7 +168,7 @@ def compute_xent_loss_helper(
+   # The score for the sequence is the negative of the sum of per token cross
+   # entropy, which is the (weighted) sum of log probs on the tokens.
+   per_example_output = NestedMap(
+-      labels=labels, scores=-predictions.per_sequence_xent
++      labels=labels, scores=predictions.per_sequence_xent
+   )
+   if apply_eval_sample_weights and hasattr(input_batch, 'eval_sample_weights'):
+     per_example_output.eval_sample_weights = input_batch.eval_sample_weights
 diff --git a/praxis/layers/multi_query_attention.py b/praxis/layers/multi_query_attention.py
 index 67bdf55..67d3557 100644
 --- a/praxis/layers/multi_query_attention.py

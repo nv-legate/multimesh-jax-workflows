@@ -14,15 +14,13 @@ parser.add_argument(
     default="dev",
 )
 
-parser.add_argument(
-    "--cache", action=argparse.BooleanOptionalAction, default=True
-)
+parser.add_argument("--cache", action=argparse.BooleanOptionalAction, default=True)
 
 parser.add_argument(
-  "--framework",
-  type=str,
-  choices=["paxml", "maxtext"],
-  default="paxml",
+    "--framework",
+    type=str,
+    choices=["paxml", "maxtext"],
+    default="paxml",
 )
 
 parser.add_argument(
@@ -54,10 +52,6 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--custom-nccl", action=argparse.BooleanOptionalAction, default=False
-)
-
-parser.add_argument(
     "--build-type",
     type=str,
     choices=["Release", "Debug", "RelWithDebInfo"],
@@ -71,9 +65,7 @@ parser.add_argument(
     default=None,
     help="The tag to use for naming the image",
 )
-parser.add_argument(
-    "--latest", action=argparse.BooleanOptionalAction, default=False
-)
+parser.add_argument("--latest", action=argparse.BooleanOptionalAction, default=False)
 
 parser.add_argument(
     "--repo",
@@ -82,9 +74,7 @@ parser.add_argument(
     help="The repo (prefix) to use for image uploads",
 )
 
-parser.add_argument(
-    "--upload", action=argparse.BooleanOptionalAction, default=False
-)
+parser.add_argument("--upload", action=argparse.BooleanOptionalAction, default=False)
 
 args = parser.parse_args()
 
@@ -121,7 +111,6 @@ for arg, value in (
     ("CUDA_VERSION", args.cuda_version),
     ("CUDNN_VERSION", args.cudnn_version),
     ("FRAMEWORK", args.framework),
-    ("CUSUTOM_NCCL", 1 if args.custom_nccl else 0),
 ):
     cmds.append("--build-arg")
     cmds.append(f"{arg}={value}")
@@ -138,6 +127,5 @@ if args.upload:
     os.system(f"docker push {remote_image}")
     if args.latest:
         latest_image = f"{args.repo}/{short_image_name}:latest"
-        os.system(f"docker tag {image_name} {latest_image}")
         print(f"Pushing to {latest_image}")
         os.system(f"docker push {latest_image}")

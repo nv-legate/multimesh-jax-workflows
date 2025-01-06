@@ -1,7 +1,7 @@
 ARG CUDA_VERSION
 ARG CUDNN_VERSION
 ARG FRAMEWORK="paxml"
-FROM nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-devel-ubuntu22.04 AS conda_base
+FROM nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-devel-ubuntu22.04 AS base
 
 SHELL [ "/bin/bash", "-eo", "pipefail", "-c" ]
 
@@ -10,14 +10,16 @@ RUN /opt/install-apt.sh
 
 ENV CUDA_PATH="/usr/local/cuda/lib64/stubs"
 
-ARG CUSTOM_NCCL
+FROM base AS nccl_base
 COPY nccl /opt/nccl
 COPY build-nccl.sh /opt/nccl
-RUN echo ${CUSTOM_NCCL} && cd /opt/nccl && CUSTOM_NCCL="${CUSTOM_NCCL}" && ./build-nccl.sh
+RUN cd /opt/nccl && ./build-nccl.sh
 
+FROM nccl_base AS bazel_base
 COPY install-bazel.sh /opt
 RUN /opt/install-bazel.sh
 
+FROM bazel_base AS conda_base
 COPY install-conda.sh /opt
 RUN /opt/install-conda.sh
 
@@ -36,29 +38,33 @@ RUN --mount=type=cache,from=mellanox_download,source=/opt/MLNX_OFED_LINUX-5.4-3.
   /opt/install-mofed.sh
 
 FROM mellanox_install AS ucx_build
-COPY download-build-ucx.sh /opt
-RUN /opt/download-build-ucx.sh
+COPY ucx /opt/ucx
+COPY build-ucx.sh /opt/ucx
+RUN /opt/ucx/build-ucx.sh
 
 FROM mellanox_install AS ucx_install
 RUN --mount=type=cache,from=ucx_build,source=/opt/ucx,target=/opt/ucx \
   cd /opt/ucx && make -j install
 
-FROM ucx_install AS te_install
+FROM ucx_install AS symlink_cuda
+COPY symlink-cudalibs.sh /opt
+RUN /opt/symlink-cudalibs.sh
+
+# TE requires XLA source to be there
+# but we don't want to re-build TE
+# every time we make a minor update
+# to the XLA plugin
+FROM symlink_cuda AS te_build_deps
+COPY te-xla /opt/xla
+
+FROM symlink_cuda AS te_install
 COPY te /opt/te
 COPY install-te.sh /opt
 RUN conda run -n legere python -m pip install cmake
-RUN /opt/install-te.sh -e
+RUN --mount=type=cache,from=te_build_deps,source=/opt/xla,target=/opt/xla \
+  /opt/install-te.sh -e
 
-FROM te_install AS build_jaxlib
-
-ARG BAZEL_CACHE=grpc://host.docker.internal:9092
-ENV PATH=$PATH:/opt/bazel
-COPY xla /opt/xla
-COPY jax /opt/jaxlib
-COPY build-jaxlib.sh /opt
-RUN /opt/build-jaxlib.sh ${BAZEL_CACHE}
-
-FROM build_jaxlib AS build_realm
+FROM te_install AS build_realm
 ARG LEGATE_BUILD_TYPE=Release
 COPY realm /opt/realm
 COPY build-realm.sh /opt
@@ -71,7 +77,17 @@ COPY zuku /opt/zuku
 COPY build-zuku.sh /opt
 RUN /opt/build-zuku.sh ${LEGATE_BUILD_TYPE}
 
-FROM build_zuku AS build_jax_plugin
+FROM build_zuku AS build_jaxlib
+ARG BAZEL_CACHE=grpc://host.docker.internal:9092
+ENV PATH=$PATH:/opt/bazel
+COPY install-clang.sh /opt
+RUN /opt/install-clang.sh
+COPY xla /opt/xla
+COPY jax /opt/jaxlib
+COPY build-jaxlib.sh /opt
+RUN /opt/build-jaxlib.sh ${BAZEL_CACHE}
+
+FROM build_jaxlib AS build_jax_plugin
 COPY legate-jax /opt/legate-jax
 COPY build-legate-jax.sh /opt
 RUN /opt/build-legate-jax.sh
@@ -115,7 +131,6 @@ COPY entrypoint.sh /opt/entrypoint.sh
 
 FROM reinstall_custom_jax AS paxml_install
 COPY paxml /opt/paxml
-COPY legate-jax/examples/paxml/run.py /opt
 RUN cd /opt/paxml && conda run -n legere python -m pip install -e . --no-deps --no-build-isolation --force-reinstall
 COPY paxml-fixup-pip.sh /opt
 RUN /opt/paxml-fixup-pip.sh
@@ -124,7 +139,6 @@ CMD [ "/bin/bash" ]
 
 FROM reinstall_custom_jax AS maxtext_install
 COPY maxtext /opt/maxtext
-COPY legate-jax/examples/maxtext/run.py /opt
 RUN cd /opt/maxtext && conda run -n legere python -m pip install -e . --no-deps --no-build-isolation --force-reinstall
 COPY maxtext-fixup-pip.sh /opt
 RUN /opt/maxtext-fixup-pip.sh
