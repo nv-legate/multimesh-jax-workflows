@@ -73,7 +73,7 @@ realm.add_argument(
 realm.add_argument(
     "--profile",
     action=argparse.BooleanOptionalAction,
-    default=False,
+    default=True,
     help="whether nsys profiling events should be created",  # noqa: E501
 )
 
@@ -84,6 +84,13 @@ xla.add_argument(
     type=str,
     default=None,
     help="A folder for dumping the HLO modules",
+)
+
+xla.add_argument(
+    "--dump-mpmd-passes",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Whether to dump all intermediate HLO modules from the MPMD passes",
 )
 
 xla.add_argument(
@@ -103,8 +110,15 @@ xla.add_argument(
 xla.add_argument(
     "--use-nccl-comm-split",
     action=argparse.BooleanOptionalAction,
-    default=False,
+    default=True,
     help="Whether to use comm split to create communicators",
+)
+
+xla.add_argument(
+    "--hoist-loop-convert",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Wether to hoist converts inside a loop to avoid recomputation (at the cost of extra memory)",  # noqa: E501
 )
 
 xla.add_argument(
@@ -237,7 +251,7 @@ legate_jax.add_argument(
 legate_jax.add_argument(
     "--schedule",
     type=str,
-    choices=["fill-drain", "gpipe", "1f1b", "wavefront"],
+    choices=["fill-drain", "gpipe", "1f1b", "wavefront", "prefetch-wavefront"],
     default="fill-drain",
     help="The microbatch schedule to use",
 )
@@ -298,6 +312,13 @@ paxml.add_argument(
     type=int,
     default=2048,
     help="The sequence length",
+)
+
+paxml.add_argument(
+    "--gradient-clipping",
+    type=float,
+    default=None,
+    help="The gradient clipping cutoff, if gradient clipping should be used",
 )
 
 paxml.add_argument(
@@ -389,6 +410,8 @@ if args.te:
     os.environ["ENABLE_TE_SP"] = "1"
     os.environ["NVTE_FUSED_ATTN"] = "1"
 
+if args.hoist_loop_convert:
+    os.environ["LEGATE_XLA_HOIST_CONVERT"] = "1"
 
 if args.host_offload_min_reuse_distance > 0 and args.gpus > args.cpus:
     raise Exception(
@@ -455,19 +478,20 @@ if args.collective_matmul is not None:
     )
 
 if args.dump_hlo and args.dump is None:
-    raise ValueError(
-        "--dump-only requested, but no HLO dump folder passed to --dump"
-    )
+    raise ValueError("--dump-only requested, but no folder passed to --dump")
 
 if args.dump:
     xla_flags = xla_flags + [
         f"--xla_dump_to={args.dump}",
         "--xla_dump_hlo_as_text",
-        "--xla_dump_hlo_as_proto",
     ]
 if args.dump_all_passes:
     xla_flags = xla_flags + [
         "--xla_dump_hlo_pass_re=.*",
+    ]
+elif args.dump_mpmd_passes:
+    xla_flags = xla_flags + [
+        "--xla_dump_hlo_pass_re=mpmd.*",
     ]
 
 if existing_xla_flags := os.environ.get("XLA_FLAGS", None):
@@ -496,10 +520,11 @@ if args.dump_hlo:
     if args.batch_size is None:
         raise ValueError(
             "must give explicit --batch-size when using --dump-hlo"
-        )
+        )  # noqa: E501
 
 batch_size = args.batch_size or total_devices * 4
-mb_size = args.microbatch_size or batch_size
+mb_size_per_node = args.microbatch_size or batch_size
+global_mb_size = mb_size_per_node * args.dp * args.fsdp
 per_core_batch_size = batch_size // total_devices
 devices_per_stage = total_devices // args.pp
 transformer_num_devices = devices_per_stage
@@ -507,6 +532,7 @@ num_stages_per_interleave = args.pp
 num_stages = num_stages_per_interleave * args.interleave
 layers_per_stage = args.num_layers // num_stages
 layers_per_interleave = args.num_layers // args.interleave
+gradient_clip = args.gradient_clipping or 0.0
 
 if batch_size % total_devices:
     raise ValueError(
@@ -537,11 +563,8 @@ class PaxTransformerConfig:
 
         layer_regex = re.compile(r"layers_(\d+)")
 
-        microbatch_size = args.microbatch_size or batch_size
-        if microbatch_size < args.fsdp:
-            raise Exception(
-                "FSDP parallelism cannot exceed the microbatch size"
-            )
+        if global_mb_size < args.fsdp:
+            raise Exception("FSDP amount cannot exceed the microbatch size")
 
         if args.load_balance_embeddings:
             loop_dependent_submesh_size = transformer_num_devices
@@ -665,7 +688,7 @@ PaxTransformerConfig:
   layers_per_interleave = {layers_per_interleave}
 
 MicrobatchConfig:
-  size = {mb_size}
+  size = {global_mb_size}
   schedule = '{args.schedule}'
   num_stages = {num_stages}
   interleave = {args.interleave}
@@ -714,7 +737,7 @@ argv = [
     "--fdl.LAMBADA_TRAIN=True",
     "--fdl.REMAT=True",
     f'--fdl.CHECKPOINT_POLICY="{args.remat}"',
-    f'--fdl.CLIP_GRADIENT_NORM_TO_VALUE=0.0',
+    f"--fdl.CLIP_GRADIENT_NORM_TO_VALUE={gradient_clip}",
     f"--fdl.SUMMARY_INTERVAL_STEPS={args.num_steps}",
     f"--fdl.MAX_STEPS={args.num_steps}",
     "--fdl.EVAL_INTERVAL_STEPS=0",
@@ -772,7 +795,7 @@ with legate.jax.context(
                 if path.exists():
                     globber = (
                         path / "*pjit_autoshard*before_optimizations.hlo.pb"
-                    )
+                    )  # noqa: E501
                     matches = glob.glob(str(globber))
                     if matches:
                         print(
