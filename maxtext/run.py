@@ -273,7 +273,7 @@ legate_jax.add_argument(
 legate_jax.add_argument(
     "--replicate-small-params",
     action=argparse.BooleanOptionalAction,
-    default=False,
+    default=True,
     help="Replicate all smaller than batch*squence_length",
 )
 
@@ -555,7 +555,7 @@ if total_parallelism != total_devices:
         f"PP={args.pp} DP={args.dp} TP={args.tp} FSDP={args.fsdp} does not multiply to total no. of GPUS {total_devices}"  # noqa: E501
     )
 
-# 2 perdevice if batch size is specified
+# 2 perdevice if batch size is unspecified
 batch_size = args.batch_size or total_devices * 2
 mb_size = args.microbatch_size or batch_size
 global_mb_size = mb_size * args.dp * args.fsdp
@@ -564,10 +564,16 @@ devices_per_stage = total_devices // args.pp
 transformer_num_devices = devices_per_stage
 num_stages_per_interleave = args.pp
 num_stages = num_stages_per_interleave * args.interleave
-# 8 layers given by smoke test
-base_num_decoder_layers = args.num_layers
-layers_per_stage = base_num_decoder_layers // num_stages
-layers_per_interleave = base_num_decoder_layers // args.interleave
+if args.num_layers is None:
+    base_num_decoder_layers = None
+    layers_per_stage = None
+    layers_per_interleave = None
+    if args.pp > 1:
+        raise Exception("please specify --num-layers for configuring pipeline parallelism with --pp > 1")
+else:
+    base_num_decoder_layers = args.num_layers
+    layers_per_stage = base_num_decoder_layers // num_stages
+    layers_per_interleave = base_num_decoder_layers // args.interleave
 
 if batch_size % total_devices:
     raise ValueError(

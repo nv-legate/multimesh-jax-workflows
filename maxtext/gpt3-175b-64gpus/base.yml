@@ -1,0 +1,131 @@
+normalization_layer_epsilon: 1.e-05
+enable_checkpointing: False
+async_checkpointing: True
+checkpoint_period: 10_000
+enable_single_replica_ckpt_restoring: False
+force_unroll: False
+gcs_metrics: False
+dtype: "bfloat16"
+matmul_precision: "default"
+activations_in_float32: False
+quant_cfg_path: ""
+quantize_kvcache: False
+kv_quant_axis: "heads_and_dkv"
+kv_quant_dtype: "int8"
+weight_dtype: float32
+global_parameter_scale: 1
+base_emb_dim: 2048
+base_num_query_heads: 16
+base_num_kv_heads: 16
+base_mlp_dim: 7168
+base_num_decoder_layers: 16
+head_dim: 128
+mlp_activations: ["relu"]
+dropout_rate: 0
+logits_via_embedding: True
+normalize_embedding_logits: True
+logits_dot_in_fp32: False
+remat_policy: 'minimal'
+scan_layers: False
+attention: 'dot_product'
+attention_type: 'global'
+attn_logits_soft_cap: 0.0
+final_logits_soft_cap: 0.0
+use_post_attn_norm: False
+use_post_ffw_norm: False
+fused_qkv: False
+fused_mlp: False
+record_internal_nn_metrics: 0
+hardware: 'gpu'
+mesh_axes: ['data', 'stage', 'fsdp', 'fsdp_transpose', 'sequence', 'tensor', 'expert', 'autoregressive']
+logical_axis_rules: [
+                      ['activation_batch', ['data', 'fsdp', 'fsdp_transpose', 'expert']],
+                      ['activation_batch_no_exp', ['data', 'fsdp', 'fsdp_transpose']],
+                      ['activation_embed_and_logits_batch', ['stage', 'data', 'fsdp', 'fsdp_transpose', 'expert']],
+                      ['activation_heads', ['tensor','sequence']],
+                      ['activation_kv_heads', ['tensor','sequence']],
+                      ['activation_length', 'sequence'],
+                      ['activation_embed', 'tensor'],
+                      ['activation_mlp', 'tensor'],
+                      ['activation_kv', 'tensor'],
+                      ['activation_kv_batch', ['data', 'fsdp', 'fsdp_transpose', 'expert']],
+                      ['activation_kv_head_dim', 'tensor'],
+                      ['activation_vocab', ['tensor', 'sequence']],
+                      ['activation_vocab', 'tensor'],
+                      ['activation_vocab', 'sequence'],
+                      ['activation_stage', 'stage'],
+                      ['activation_exp', 'expert'],
+                      ['mlp', ['fsdp_transpose', 'tensor', 'autoregressive']],
+                      ['vocab', ['tensor', 'autoregressive']],
+                      ['embed', ['fsdp', 'fsdp_transpose', 'sequence', 'expert']],
+                      ['embed', ['fsdp', 'sequence', 'expert']],
+                      ['embed_no_exp', ['fsdp', 'fsdp_transpose', 'sequence']],
+                      ['embed_no_exp', ['fsdp', 'sequence']],
+                      ['norm', 'tensor'],
+                      ['heads', ['tensor', 'autoregressive']],
+                      ['layers', 'stage'],
+                      ['kv', []],
+                      ['kv_heads', ['tensor', 'autoregressive']],
+                      ['kv_head_dim', []],
+                      ['cache_batch', []],
+                      ['cache_heads', ['autoregressive', 'tensor']],
+                      ['cache_kv', []],
+                      ['cache_sequence', []],
+                      ['exp', 'expert'],
+                    ]
+data_sharding: [['data', 'stage', 'fsdp', 'fsdp_transpose', 'sequence', 'tensor', 'expert', 'autoregressive']]
+
+dcn_data_parallelism: 1
+dcn_fsdp_parallelism: 1
+dcn_fsdp_transpose_parallelism: 1
+dcn_sequence_parallelism: 1
+dcn_tensor_parallelism: 1
+dcn_pipeline_parallelism: 1
+dcn_expert_parallelism: 1
+dcn_autoregressive_parallelism: 1
+ici_data_parallelism: 1
+ici_fsdp_parallelism: 1
+ici_fsdp_transpose_parallelism: 1
+ici_sequence_parallelism: 1
+ici_tensor_parallelism: 1
+ici_autoregressive_parallelism: 1
+ici_pipeline_parallelism: 1
+ici_expert_parallelism: 1
+num_slices: -1
+vocab_size: 32_000
+tokenizer_path: "assets/tokenizer.llama2"
+tokenize_train_data: True
+tokenize_eval_data: True
+add_bos: True
+add_eos: True
+
+per_device_batch_size: 12.0
+expansion_factor_real_data: -1
+eval_per_device_batch_size: 0
+train_data_column: 'text'
+eval_data_column: 'text'
+dataset_type: synthetic
+eval_split: 'validation'
+
+learning_rate: 3.e-5
+cosine_learning_rate_final_fraction: 0.1
+warmup_steps_fraction: 0.1
+learning_rate_schedule_steps: -1
+
+max_target_length: 2048
+
+enable_dropout: True
+enable_data_shuffling: True
+data_shuffle_seed: 0
+init_weights_seed: 0
+
+gradient_clipping_threshold: 0.0
+
+gradient_accumulation_steps: 1
+
+opt_type: "adamw"
+adam_b1: 0.9
+adam_b2: 0.95
+adam_eps: 1.e-8
+adam_eps_root: 0
+adam_weight_decay: 0.1

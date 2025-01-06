@@ -50,3 +50,88 @@ For configuring pipeline parallelism, the most important parameters are:
 PaxML and MaxText will each have unique parameters for selecting models and configuring
 features of the model, such as checkpoint/recomputation strategy.
 
+## Running smoke tests locally for PaxML and MaxText
+
+To run an example job in the container locally, example scripts are included in the repo.
+
+### MaxText with 2 GPUs
+
+A [script](maxtext/validate-gpu.sh) for running a small job with TP=2 is included.
+The container can be launched from the top-level directory as:
+
+```
+docker run \
+  --cap-add SYS_ADMIN \
+  --entrypoint /opt/entrypoint.sh \
+  --net=host \
+  --add-host=host.docker.internal:host-gateway \
+  --mount type=bind,source="$(pwd)"/maxtext,target=/workspace \
+  -w /workspace \
+  --gpus 2 \
+  gitlab-master.nvidia.com:5005/legate/quickstart.internal/legate-jax-dev:maxtext \
+  ./validate-gpu.sh
+```
+
+### MaxText with 8 CPUs
+
+A [script](maxtext/validate-cpu.sh) for running a small job with DP=2, PP=2, TP=2 is included.
+Currently the container requires CUDA present even if running a
+CPU-only job. To launch the job:
+
+```
+docker run \
+  --cap-add SYS_ADMIN \
+  --entrypoint /opt/entrypoint.sh \
+  --net=host \
+  --add-host=host.docker.internal:host-gateway \
+  --mount type=bind,source="$(pwd)"/maxtext,target=/workspace \
+  -w /workspace \
+  --gpus 2 \
+  gitlab-master.nvidia.com:5005/legate/quickstart.internal/legate-jax-dev:maxtext \
+  ./validate-cpu.sh
+```
+
+### PaxML with 2 GPUs
+
+A [script](paxml/validate-gpu.sh) for running a small job with TP=2 is included.
+PaxML is currently most stable with GPU/process:
+
+```
+docker run \
+  --cap-add SYS_ADMIN \
+  --entrypoint /opt/entrypoint.sh \
+  --net=host \
+  --add-host=host.docker.internal:host-gateway \
+  --mount type=bind,source="$(pwd)"/paxml,target=/workspace \
+  --gpus 2 \
+  -w /workspace \
+  gitlab-master.nvidia.com:5005/legate/quickstart.internal/legate-jax-dev:paxml \
+  mpirun -n 2 --allow-run-as-root validate-gpu.sh
+```
+
+### PaxML with 8 CPUs
+
+A [script](paxml/validate-cpu.sh) for running a small job with PP=2, TP=4 is included.
+Currently the container requires CUDA present even if running a
+CPU-only job. To launch the job:
+
+```
+docker run \
+  --cap-add SYS_ADMIN \
+  --entrypoint /opt/entrypoint.sh \
+  --net=host \
+  --add-host=host.docker.internal:host-gateway \
+  --mount type=bind,source="$(pwd)"/paxml,target=/workspace \
+  --gpus 2 \
+  -w /workspace \
+  gitlab-master.nvidia.com:5005/legate/quickstart.internal/legate-jax-dev:paxml \
+  ./validate-cpu.sh
+```
+
+## Large runs on a DGX
+
+Scripts and config files are included for running larger jobs
+with hwloc bindings for a DGX H100.
+
+* [PaxML GPT3-175B for 64 GPUs](paxml/gpt3-175b-64gpus)
+* [MaxText GPT3-175B for 64 GPUs](maxtext/gpt3-175b-64gpus)
