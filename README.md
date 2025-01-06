@@ -17,7 +17,7 @@ Documentation on the Jax APIs can be found [here](http://sw-mobile-docs/cllr/leg
 
 ## Driver scripts for running PaxML/MaxText
 
-Scripts for running `PaxML` and `MaxText` are included to simplify the process
+Scripts for running [PaxML](paxml/run.py) and [MaxText](maxtext/run.py) are included to simplify the process
 of tuning parameters. A full list of options can be required by running:
 
 ```

@@ -22,67 +22,67 @@ parser = argparse.ArgumentParser(allow_abbrev=False)
 
 # LEGION parameters
 ############################################
-legion = parser.add_argument_group("Legion")
-legion.add_argument(
+realm = parser.add_argument_group("Realm")
+realm.add_argument(
     "--nodes",
     type=int,
     default=None,
     help="The number of nodes to run on",
 )
-legion.add_argument(
+realm.add_argument(
     "--network",
     type=str,
     choices=["none", "gasnetex", "ucx"],
     default="none",
     help="The Legion network module to use",
 )
-legion.add_argument(
+realm.add_argument(
     "--fbmem",
     type=int,
     default=70,
     help="The amount in GB of frame-buffer memory to use",
 )
-legion.add_argument(
+realm.add_argument(
     "--zcmem",
     type=int,
     default=4,
     help="The amount in GB of zero-copy (host pinned) memory to use",
 )
-legion.add_argument(
+realm.add_argument(
     "--sysmem",
     type=int,
     default=4,
     help="The amount in GB of host memory to use",
 )
-legion.add_argument(
+realm.add_argument(
     "--eager-sysmem",
     type=int,
     default=None,
     help="The amount in GB of host memory to reserve for eager allocations",  # noqa: E501
 )
-legion.add_argument(
+realm.add_argument(
     "--eager-fbmem",
     type=int,
     default=None,
     help="The amount in GB of frame-buffer memory to reserve for eager allocations",  # noqa: E501
 )
-legion.add_argument(
+realm.add_argument(
     "--gpus",
     type=int,
     default=8,
     help="The number of GPUs to use per-node.",
 )
-legion.add_argument(
+realm.add_argument(
     "--cpus",
     type=int,
     default=4,
     help="The number of CPUs to use per-node.",
 )
-legion.add_argument(
+realm.add_argument(
     "--profile",
-    type=str,
-    default=None,
-    help="The root of the profile file, if Legion profiling should be activated",  # noqa: E501
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="whether nsys profiling events should be created",  # noqa: E501
 )
 
 
@@ -106,6 +106,12 @@ xla.add_argument(
     type=int,
     default=None,
     help="Specify the cutoff in MiB for activating collective matul/windowed einsum tensor parallelism",  # noqa: E501
+)
+xla.add_argument(
+    "--hoist-loop-convert",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Wether to hoist converts inside a loop to avoid recomputation (at the cost of extra memory)",  # noqa: E501
 )
 xla.add_argument(
     "--latency-hiding-scheduler",
@@ -231,7 +237,7 @@ legate_jax.add_argument(
     "--microbatch-size",
     type=int,
     default=None,
-    help="The size of the microbatches to use. Default is to match the global batch size",  # noqa: E501
+    help="The size of the per-node microbatch to use. This is microbatch size per tensor-parallel domain, independent of data parallelism or FSDP. Default is to match the global batch size",  # noqa: E501
 )
 legate_jax.add_argument(
     "--hlo",
@@ -250,6 +256,12 @@ legate_jax.add_argument(
     type=str,
     default=None,
     help="A folder for dumping the HLO modules",
+)
+legate_jax.add_argument(
+    "--dump-mpmd-passes",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Whether to dump all intermediate HLO modules from the MPMD passes",
 )
 legate_jax.add_argument(
     "--dump-all-passes",
@@ -403,6 +415,9 @@ maxtext.add_argument(
 ############################################
 args, realm_argv = parser.parse_known_args()
 
+if args.scan_layers:
+    raise Exception("--scan-layers is not yet support for MaxText")
+
 if args.gpus > 0:
     if args.nodes > 1:
         hardware = "gpu_multiprocess"
@@ -424,7 +439,7 @@ if args.dump_only:
     if args.batch_size is None:
         raise ValueError(
             "must give explicit --batch-size when using --dump-only"
-        )
+        )  # noqa: E501
 
 
 # setup environment variables
@@ -474,45 +489,22 @@ xla_flags = [
     f"--xla_gpu_enable_latency_hiding_scheduler={args.latency_hiding_scheduler}",  # noqa: E501
     "--xla_gpu_enable_triton_gemm=false",
     "--xla_gpu_graph_level=0",
+    f"--xla_gpu_all_reduce_combine_threshold_bytes={args.xla_ar_threshold}",  # noqa: E501
+    f"--xla_gpu_all_gather_combine_threshold_bytes={args.xla_ag_threshold}",  # noqa: E501
+    f"--xla_gpu_reduce_scatter_combine_threshold_bytes={args.xla_rs_threshold}",  # noqa: E501
+    f"--xla_gpu_enable_pipelined_all_gather={args.xla_pipelining}",
+    f"--xla_gpu_enable_pipelined_reduce_scatter={args.xla_pipelining}",
+    f"--xla_gpu_enable_pipelined_all_reduce={args.xla_pipelining}",
+    f"--xla_gpu_enable_while_loop_double_buffering={args.xla_loop_buffering}",  # noqa: E501
+    "--xla_gpu_enable_all_gather_combine_by_dim=false",
+    "--xla_gpu_enable_reduce_scatter_combine_by_dim=false",
+    "--xla_gpu_enable_triton_softmax_fusion=false",
 ]
 
 
 # these come from the nvidia JAX toolbox benchmarks
 if args.backend == "legate":
-    xla_flags.extend(
-        [
-            f"--xla_gpu_all_reduce_combine_threshold_bytes={args.xla_ar_threshold}",  # noqa: E501
-            f"--xla_gpu_all_gather_combine_threshold_bytes={args.xla_ag_threshold}",  # noqa: E501
-            f"--xla_gpu_reduce_scatter_combine_threshold_bytes={args.xla_rs_threshold}",  # noqa: E501
-            f"--xla_gpu_enable_pipelined_all_gather={args.xla_pipelining}",
-            f"--xla_gpu_enable_pipelined_reduce_scatter={args.xla_pipelining}",
-            f"--xla_gpu_enable_pipelined_all_reduce={args.xla_pipelining}",
-            f"--xla_gpu_enable_while_loop_double_buffering={args.xla_loop_buffering}",  # noqa: E501
-            "--xla_gpu_enable_all_gather_combine_by_dim=false",
-            "--xla_gpu_enable_reduce_scatter_combine_by_dim=false",
-            # these are specific to legate
-            "--xla_gpu_enable_highest_priority_async_stream=true",
-            "--xla_gpu_enable_triton_softmax_fusion=false",
-            # "--xla_gpu_all_reduce_combine_threshold_bytes=51200",
-            # "--xla_dump_hlo_pass_re=.*",
-        ]
-    )
-else:
-    xla_flags.extend(
-        [
-            f"--xla_gpu_all_reduce_combine_threshold_bytes={args.xla_ar_threshold}",  # noqa: E501
-            f"--xla_gpu_all_gather_combine_threshold_bytes={args.xla_ag_threshold}",  # noqa: E501
-            f"--xla_gpu_reduce_scatter_combine_threshold_bytes={args.xla_rs_threshold}",  # noqa: E501
-            f"--xla_gpu_enable_pipelined_all_gather={args.xla_pipelining}",
-            f"--xla_gpu_enable_pipelined_reduce_scatter={args.xla_pipelining}",
-            f"--xla_gpu_enable_pipelined_all_reduce={args.xla_pipelining}",
-            f"--xla_gpu_enable_while_loop_double_buffering={args.xla_loop_buffering}",  # noqa: E501
-            "--xla_gpu_enable_all_gather_combine_by_dim=false",
-            "--xla_gpu_enable_reduce_scatter_combine_by_dim=false",
-            "--xla_gpu_enable_triton_softmax_fusion=false",
-        ]
-    )
-
+    xla_flags.append("--xla_gpu_enable_highest_priority_async_stream=true")
 
 if args.collective_matmul is not None:
     xla_flags.extend(
@@ -523,11 +515,11 @@ if args.collective_matmul is not None:
         ]
     )
 
+if args.hoist_loop_convert:
+    os.environ["LEGATE_XLA_HOIST_CONVERT"] = "1"
 
 if args.dump_only and args.dump is None:
-    raise ValueError(
-        "--dump-only requsted, but not HLO dump folder passed to --dump"
-    )
+    raise ValueError("--dump-only requsted, but no older passed to --dump")
 if args.dump:
     xla_flags = xla_flags + [
         f"--xla_dump_to={args.dump}",
@@ -538,6 +530,11 @@ if args.dump_all_passes:
     xla_flags = xla_flags + [
         "--xla_dump_hlo_pass_re=.*",
     ]
+elif args.dump_mpmd_passes:
+    xla_flags = xla_flags + [
+        "--xla_dump_hlo_pass_re=mpmd.*",
+    ]
+
 
 if existing_xla_flags := os.environ.get("XLA_FLAGS", None):
     xla_flags.append(existing_xla_flags)
@@ -561,6 +558,7 @@ if total_parallelism != total_devices:
 # 2 perdevice if batch size is specified
 batch_size = args.batch_size or total_devices * 2
 mb_size = args.microbatch_size or batch_size
+global_mb_size = mb_size * args.dp * args.fsdp
 per_device_batch_size = batch_size // total_devices
 devices_per_stage = total_devices // args.pp
 transformer_num_devices = devices_per_stage
@@ -592,7 +590,8 @@ print(f"transformer_num_devices = {transformer_num_devices}")
 print(f"num_stages_per_interleave = {num_stages_per_interleave}")
 print(f"num_stages = {num_stages}")
 print(f"batch_size = {batch_size}")
-print(f"mb_size = {mb_size}")
+print(f"mb_size_per_node = {mb_size}")
+print(f"global_mb_size = {global_mb_size}")
 
 
 for key, val in env.items():
@@ -650,7 +649,7 @@ if args.backend == "legate":
     import train
     from legate.jax import register_task
 
-    if args.pp == 1 and mb_size == batch_size:
+    if args.pp == 1 and global_mb_size == batch_size:
         # just default transformer parallelism
         register_task(
             "default",
@@ -660,9 +659,7 @@ if args.backend == "legate":
             logical_axes=transformer_axes,
         )
     else:  # pp > 1 or microbatching
-        train.set_mb_config(
-            mb_size, args.schedule, num_stages, args.interleave
-        )
+        train.set_mb_config(mb_size, args.schedule, num_stages, args.interleave)
         layer_regex = re.compile(r"layers_(\d+)")
 
         def compute_devices(name: str):
@@ -687,39 +684,26 @@ if args.backend == "legate":
         last_layer_devices = devices[-num_devices_for_all_loops:]
 
         layer_meshes = {
-            "(emb_lookup).*": (
+            "(emb).*": (
                 first_layer_devices,
                 loop_dependent_submesh_size,
-                False,
-            ),
-            "(position_emb).*": (
-                first_layer_devices,
-                loop_dependent_submesh_size,
-                False,
             ),
             "(decoder_norm).*": (
                 last_layer_devices,
                 loop_dependent_submesh_size,
-                True,
             ),
             "(compute_loss).*": (
                 last_layer_devices,
                 loop_dependent_submesh_size,
-                True,
             ),
             "(final_ln).*": (
                 last_layer_devices,
                 loop_dependent_submesh_size,
-                True,
             ),
-            "default": (devices[:transformer_num_devices], None, False),
+            "default": (devices[:transformer_num_devices], None),
         }
 
-        for layer, (
-            devices,
-            loop_submesh_size,
-            submesh_rotation,
-        ) in layer_meshes.items():
+        for layer, (devices, loop_submesh_size) in layer_meshes.items():
             register_task(
                 layer,
                 devices=devices,
@@ -727,7 +711,7 @@ if args.backend == "legate":
                 device_axes=["x", "y", "z"],
                 logical_axes=transformer_axes,
                 loop_submesh_size=loop_submesh_size,
-                loop_submesh_reverse=submesh_rotation,
+                loop_submesh_reverse=False,
             )
 
 import maxtext_utils as mu  # noqa: E402 must come after legate init
@@ -753,9 +737,11 @@ argv = [
     "enable_checkpointing=False",
     f"scan_layers={args.scan_layers}",
     f"per_device_batch_size={per_device_batch_size}",
-    f"use_iota_embed={args.use_iota_embed}",
-    f"logits_dot_in_fp32={args.logits_dot_in_fp32}",
 ]
+
+if args.model_name is not None:
+    argv.append(f"use_iota_embed={args.use_iota_embed}")
+    argv.append(f"logits_dot_in_fp32={args.logits_dot_in_fp32}")
 
 if args.model_dims is not None:
     argv.append(f"base_emb_dim={args.model_dims}")
@@ -783,9 +769,7 @@ argv.append(f"hardware={hardware}")
 # parallelism has to be split betweeen the ICI and DCN
 # explicitly for maxtext
 num_local_devices = len(
-    sp.check_output(
-        ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"]
-    )
+    sp.check_output(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"])
     .decode("utf-8")
     .splitlines()
 )
@@ -815,7 +799,7 @@ if args.remat:
 if args.compile_topology_num_slices:
     argv.append(
         f"compile_topology_num_slices={args.compile_topology_num_slices}"
-    )
+    )  # noqa: E501
 
 
 # always enable recomputation
@@ -846,16 +830,15 @@ with legate.jax.context(
             else:
                 runpy.run_path(
                     "/opt/maxtext/MaxText/train.py", run_name="__main__"
-                )
+                )  # noqa: E501
         except jaxlib.xla_extension.XlaRuntimeError as e:
             need_throw = True
             if args.dump_only:
                 path = Path(args.dump)
                 if path.exists():
                     globber = (
-                        path
-                        / "*pjit_autoshard_step*before_optimizations.hlo.pb"
-                    )
+                        path / "*pjit_autoshard_step*before_optimizations.hlo.pb"
+                    )  # noqa: E501
                     matches = glob.glob(str(globber))
                     if matches:
                         print(
