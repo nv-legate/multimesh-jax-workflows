@@ -1,30 +1,33 @@
 # Docker Image Instructions
 
-The Dockerfile and scripts in this folder create a working image of the [PaxML](https://github.com/google/paxml) stack.
-There are a few basic steps to create working image:
+The Dockerfile and scripts in this folder create a working image of either
+the [PaxML](https://github.com/google/paxml) or [MaxText]() stack.
+There are a few basic steps to create a working image:
 
-## Download all the relevant code
-Numerous libraries with dependencies on specific commits are required. The can be downloaded by running:
+## Download and patch all relevant repos
+Numerous libraries with dependencies on specific commits are required. These are
+managed as Git submodules. To run the submodule updates and apply patch files,
+run the `bootstrap.sh` in the top-level directory:
 
 ```bash
-$ ./clone-all.sh
+legate-jax-workflows $ ./bootstrap.sh
 ```
 
-Some of the repos are private and expect an SSH key to have been configured.
+Some of the repos are private to Nvidia and expect an SSH key to have been configured.
 
 
 ## (Optional) Start a remote Bazel cache
 
-The XLA build compiles 1000s of files and can take a very long time. If you may need to rebuild an image
-with updates to any of the repos, it is highly recommended to set up a remote bazel cache.
+The XLA build compiles 1000s of files and can take a very long time. If you need to consistetly
+rebuild an image with updates to any of the repos, it is highly recommended to set up a remote bazel cache.
 It should be sufficient to run:
 
 ```bash
-$ ./start-cache.sh
+legate-jax-workflows/docker $ ./start-cache.sh
 ```
 
 This downloads and starts a Docker container with the remote cache running on gRPC port 9092.
-The script sets up the cache directory to be `$(pwd)/cache` and sets an upper limit of 100GB. 
+The script sets up the cache directory to be `$(pwd)/cache` and sets an upper limit of 30GB.
 These parameters can be changed in the script.  The XLA builds generate as much as 20GB of 
 files for a clean build.  
 
@@ -39,7 +42,7 @@ There is a `./build.py` script that starts a docker build with the correct
 arguments for mapping the remote cache on the host network into the container.
 
 ```
-$ ./build.py --framework paxml
+legate-jax-workflows/docker $ ./build.py --framework paxml
 ```
 
 This will produce an image named `legate-jax-dev:paxml` that can be tagged and pushed where needed.
@@ -57,10 +60,4 @@ $ ./build.py --image opt
 ```
 
 The same guidelines about the Bazel cache apply to the multi-stage Dockerfile.
-
-## Tags for reproducibility
-
-The Dockerfile copies a `tags` file into the image for reproducibility.
-This is generated from the `tags.sh` script. The standard build scripts
-will run this script to generate them automatically.
 

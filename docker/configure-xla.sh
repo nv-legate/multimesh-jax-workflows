@@ -16,10 +16,49 @@ export GCC_HOST_COMPILER_PATH=/usr/bin/gcc
 export CC_OPT_FLAGS=--Wno-sign-compare
 export TF_SET_ANDROID_WORKSPACE=0
 
+# symlink cudnn into a private directory
+# to avoid include conflicts
+mkdir -p /opt/nvidia/cudnn
+pushd /opt/nvidia/cudnn
+mkdir lib
+pushd lib
+for file in /lib/x86_64-linux-gnu/*cudnn*.so; do
+  ln -s $file .
+done
+popd
+mkdir include
+pushd include
+for file in /usr/include/*cudnn*.h; do
+  ln -s $file .
+done
+popd
+popd
+
+# symlink nccl into a private directory
+# to avoid include conflicts
+mkdir -p /opt/nvidia/nccl
+pushd /opt/nvidia/nccl
+mkdir lib
+pushd lib
+for file in /lib/x86_64-linux-gnu/*nccl*.so; do
+  ln -s $file .
+done
+mkdir include
+pushd include
+for file in /usr/include/*nccl*.h; do
+  ln -s $file .
+done
+popd
+popd
+
 conda run --no-capture-out -n legere python configure.py \
   --backend CUDA \
-  --host_compiler GCC \
+  --host_compiler CLANG \
+  --clang_path `which clang-15` \
   --nccl \
+  --local_cuda_path /usr/local/cuda \
+  --local_cudnn_path /opt/nvidia/cudnn \
+  --local_nccl_path /opt/nvidia/nccl \
   --nccl_version=$TF_NCCL_VERSION \
   --cuda_compute_capabilities=sm_80,sm_90a
 

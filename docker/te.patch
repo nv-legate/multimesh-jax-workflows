@@ -1,8 +1,8 @@
 diff --git a/transformer_engine/common/fused_attn/fused_attn_f16_arbitrary_seqlen.cu b/transformer_engine/common/fused_attn/fused_attn_f16_arbitrary_seqlen.cu
-index 525fd33..0f44bfb 100644
+index 42fb779..4592d85 100644
 --- a/transformer_engine/common/fused_attn/fused_attn_f16_arbitrary_seqlen.cu
 +++ b/transformer_engine/common/fused_attn/fused_attn_f16_arbitrary_seqlen.cu
-@@ -121,7 +121,7 @@ void fused_attn_arbitrary_seqlen_fwd_impl(
+@@ -122,7 +122,7 @@ void fused_attn_arbitrary_seqlen_fwd_impl(
                     std::shared_ptr<fe::graph::Tensor_attributes>>;  // dropout_offset
  
      using CacheType = std::map<FADescriptor_v1, graph_and_tensors>;
@@ -11,7 +11,7 @@ index 525fd33..0f44bfb 100644
  
      // Get plan from cache if cache is available, otherwise create one
      auto get_graph = [&](CacheType &cache, const FADescriptor_v1 &descriptor) -> graph_and_tensors {
-@@ -459,7 +459,7 @@ void fused_attn_arbitrary_seqlen_bwd_impl(
+@@ -461,7 +461,7 @@ void fused_attn_arbitrary_seqlen_bwd_impl(
                     std::shared_ptr<fe::graph::Tensor_attributes>>;  // dropout_offset
  
      using CacheType = std::map<FADescriptor_v1, graph_and_tensors>;
@@ -43,7 +43,7 @@ index 88c1490..cd8cb66 100644
      auto get_plan = [&](CacheType &cache, const FADescriptor &descriptor) {
        auto it = cache.find(descriptor);
 diff --git a/transformer_engine/common/fused_attn/fused_attn_fp8.cu b/transformer_engine/common/fused_attn/fused_attn_fp8.cu
-index fcce30d..20f46c2 100644
+index fb7765e..371dd3c 100644
 --- a/transformer_engine/common/fused_attn/fused_attn_fp8.cu
 +++ b/transformer_engine/common/fused_attn/fused_attn_fp8.cu
 @@ -918,7 +918,7 @@ void fused_attn_fp8_fwd_impl(int64_t b, int64_t h, int64_t s_q, int64_t s_kv, in
@@ -64,7 +64,7 @@ index fcce30d..20f46c2 100644
  
      // Get plan from cache if cache is available, otherwise create one
      auto get_plan = [&](CacheType& cache, const FADescriptor& descriptor) {
-@@ -1717,7 +1717,7 @@ void fused_attn_fp8_fwd_impl_v1(
+@@ -1718,7 +1718,7 @@ void fused_attn_fp8_fwd_impl_v1(
                     std::shared_ptr<fe::graph::Tensor_attributes>>;  // dropout_offset
  
      using CacheType = std::map<FADescriptor_v1, graph_and_tensors>;
@@ -73,7 +73,7 @@ index fcce30d..20f46c2 100644
  
      // Get plan from cache if cache is available, otherwise create one
      auto get_graph = [&](CacheType& cache, const FADescriptor_v1& descriptor) -> graph_and_tensors {
-@@ -2027,7 +2027,7 @@ void fused_attn_fp8_bwd_impl_v1(
+@@ -2035,7 +2035,7 @@ void fused_attn_fp8_bwd_impl_v1(
                     std::shared_ptr<fe::graph::Tensor_attributes>>;  // dropout_offset
  
      using CacheType = std::map<FADescriptor_v1, graph_and_tensors>;
@@ -83,10 +83,10 @@ index fcce30d..20f46c2 100644
      // Get plan from cache if cache is available, otherwise create one
      auto get_graph = [&](CacheType& cache, const FADescriptor_v1& descriptor) -> graph_and_tensors {
 diff --git a/transformer_engine/common/fused_attn/utils.h b/transformer_engine/common/fused_attn/utils.h
-index 74d1628..234e714 100644
+index d5cf450..25c295d 100644
 --- a/transformer_engine/common/fused_attn/utils.h
 +++ b/transformer_engine/common/fused_attn/utils.h
-@@ -138,12 +138,12 @@ cudnn_frontend::DataType_t get_cudnn_fe_dtype(const transformer_engine::DType t)
+@@ -140,12 +140,12 @@ cudnn_frontend::DataType_t get_cudnn_fe_dtype(const transformer_engine::DType t)
  class cudnnExecutionPlanManager {
   public:
    static cudnnExecutionPlanManager &Instance() {
@@ -102,10 +102,10 @@ index 74d1628..234e714 100644
      return handle_;
    }
 diff --git a/transformer_engine/jax/cpp_extensions/activation.py b/transformer_engine/jax/cpp_extensions/activation.py
-index bdc377c..42d5086 100644
+index 47483c6..6e2100b 100644
 --- a/transformer_engine/jax/cpp_extensions/activation.py
 +++ b/transformer_engine/jax/cpp_extensions/activation.py
-@@ -156,7 +156,7 @@ class ActLuPrimitive(BasePrimitive):
+@@ -162,7 +162,7 @@ class ActLuPrimitive(BasePrimitive):
          act_lu infer_sharding_from_operands
          """
          del result_infos, act_enum  # Unused.
@@ -114,7 +114,7 @@ index bdc377c..42d5086 100644
          out_sharding = NamedSharding(mesh, PartitionSpec(*x_spec[:-2], x_spec[-1]))
          return out_sharding
  
-@@ -166,7 +166,7 @@ class ActLuPrimitive(BasePrimitive):
+@@ -172,7 +172,7 @@ class ActLuPrimitive(BasePrimitive):
          act_lu partitioning
          """
          del result_infos
@@ -123,7 +123,7 @@ index bdc377c..42d5086 100644
          arg_shardings = tuple(arg_i.sharding for arg_i in arg_infos)
          out_sharding = NamedSharding(mesh, PartitionSpec(*x_spec[:-2], x_spec[-1]))
  
-@@ -290,7 +290,7 @@ class DActLuPrimitive(BasePrimitive):
+@@ -300,7 +300,7 @@ class DActLuPrimitive(BasePrimitive):
          dact_lu infer_sharding_from_operands
          """
          del result_infos, act_enum  # Unused.
@@ -132,7 +132,7 @@ index bdc377c..42d5086 100644
          dx_sharding = NamedSharding(mesh, PartitionSpec(*act_lu_out_spec))
          return dx_sharding
  
-@@ -300,7 +300,7 @@ class DActLuPrimitive(BasePrimitive):
+@@ -310,7 +310,7 @@ class DActLuPrimitive(BasePrimitive):
          dact_lu partition
          """
          del result_infos
@@ -141,7 +141,7 @@ index bdc377c..42d5086 100644
          arg_shardings = tuple(arg_i.sharding for arg_i in arg_infos)
          out_shardings = dx_sharding
  
-@@ -440,17 +440,17 @@ class ActLuFp8Primitive(BasePrimitive):
+@@ -449,17 +449,17 @@ class ActLuFp8Primitive(BasePrimitive):
      @staticmethod
      def infer_sharding_from_operands(out_dtype, act_enum, mesh, arg_infos, result_infos):
          del out_dtype, result_infos, act_enum
@@ -164,24 +164,22 @@ index bdc377c..42d5086 100644
          out_shardings = (out_sharding, amax_sharding)
  
 diff --git a/transformer_engine/jax/cpp_extensions/attention.py b/transformer_engine/jax/cpp_extensions/attention.py
-index 4e94de0..e657776 100644
+index d5b901c..29b5710 100644
 --- a/transformer_engine/jax/cpp_extensions/attention.py
 +++ b/transformer_engine/jax/cpp_extensions/attention.py
-@@ -513,8 +513,8 @@ class FusedAttnFwdPrimitive(BasePrimitive):
-     ):
-         del attn_bias_type, attn_mask_type, scaling_factor
-         del dropout_probability, is_training, max_segments_per_seq, result_infos
+@@ -500,7 +500,7 @@ class FusedAttnFwdPrimitive(BasePrimitive):
+     @staticmethod
+     def infer_sharding_from_operands(config, mesh, arg_infos, result_infos):
+         del result_infos
 -        q_spec = get_padded_spec(arg_infos[0])
--        k_spec = get_padded_spec(arg_infos[1])
 +        q_spec = get_padded_spec(arg_infos[0], mesh)
-+        k_spec = get_padded_spec(arg_infos[1], mesh)
-         match qkv_layout:
+         match config.qkv_layout:
              case NVTE_QKV_Layout.NVTE_BS3HD | NVTE_QKV_Layout.NVTE_T3HD:
                  # q_spec = (...batch, q_seqlen, head, hidden)
-@@ -912,10 +912,10 @@ class FusedAttnBwdPrimitive(BasePrimitive):
-     ):
-         del attn_bias_type, attn_mask_type, qkv_layout, scaling_factor, max_segments_per_seq
-         del dropout_probability, is_training, result_infos
+@@ -833,10 +833,10 @@ class FusedAttnBwdPrimitive(BasePrimitive):
+     @staticmethod
+     def infer_sharding_from_operands(config, mesh, arg_infos, result_infos):
+         del config, result_infos
 -        q_spec = get_padded_spec(arg_infos[0])
 -        k_spec = get_padded_spec(arg_infos[1])
 -        v_spec = get_padded_spec(arg_infos[2])
@@ -193,9 +191,24 @@ index 4e94de0..e657776 100644
          dq_sharding = NamedSharding(mesh, PartitionSpec(*q_spec))
          dk_sharding = NamedSharding(mesh, PartitionSpec(*k_spec))
          dv_sharding = NamedSharding(mesh, PartitionSpec(*v_spec))
-@@ -936,10 +936,10 @@ class FusedAttnBwdPrimitive(BasePrimitive):
-         result_infos,
-     ):
+@@ -846,10 +846,10 @@ class FusedAttnBwdPrimitive(BasePrimitive):
+     @staticmethod
+     def partition(config, mesh, arg_infos, result_infos):
+         del result_infos
+-        q_spec = get_padded_spec(arg_infos[0])
+-        k_spec = get_padded_spec(arg_infos[1])
+-        v_spec = get_padded_spec(arg_infos[2])
+-        bias_spec = get_padded_spec(arg_infos[3])
++        q_spec = get_padded_spec(arg_infos[0], mesh)
++        k_spec = get_padded_spec(arg_infos[1], mesh)
++        v_spec = get_padded_spec(arg_infos[2], mesh)
++        bias_spec = get_padded_spec(arg_infos[3], mesh)
+         dq_sharding = NamedSharding(mesh, PartitionSpec(*q_spec))
+         dk_sharding = NamedSharding(mesh, PartitionSpec(*k_spec))
+         dv_sharding = NamedSharding(mesh, PartitionSpec(*v_spec))
+@@ -1144,10 +1144,10 @@ class FusedAttnCPWithAllGatherBwdPrimitive(FusedAttnBwdPrimitive):
+         helper.check_supported()
+
          del result_infos
 -        q_spec = get_padded_spec(arg_infos[0])
 -        k_spec = get_padded_spec(arg_infos[1])
@@ -221,19 +234,19 @@ index 3d88c1f..1fe4c15 100644
  
      outer_p = core.Primitive(name_of_wrapper_p())
 diff --git a/transformer_engine/jax/cpp_extensions/misc.py b/transformer_engine/jax/cpp_extensions/misc.py
-index b27e97d..c1966aa 100644
+index 58b8db4..e91b30a 100644
 --- a/transformer_engine/jax/cpp_extensions/misc.py
 +++ b/transformer_engine/jax/cpp_extensions/misc.py
-@@ -10,7 +10,7 @@ from jax.interpreters.mlir import dtype_to_ir_type
- 
+@@ -18,7 +18,7 @@ from jax.interpreters.mlir import dtype_to_ir_type
  from transformer_engine.transformer_engine_jax import DType as TEDType
+ from transformer_engine import transformer_engine_jax
  
 -from ..sharding import get_padded_spec as te_get_padded_spec
 +from ..sharding import te_get_padded_spec
  
  
  def te_dtype_to_jax_dtype(te_dtype):
-@@ -73,14 +73,22 @@ def jax_dtype_to_te_dtype(jax_dtype):
+@@ -81,14 +81,22 @@ def jax_dtype_to_te_dtype(jax_dtype):
      return converter.get(jax_dtype)
  
  
@@ -260,10 +273,10 @@ index b27e97d..c1966aa 100644
  
  def check_valid_batch_dims(bdims):
 diff --git a/transformer_engine/jax/cpp_extensions/normalization.py b/transformer_engine/jax/cpp_extensions/normalization.py
-index f1d3a7f..6702468 100644
+index e85f28a..88b315b 100644
 --- a/transformer_engine/jax/cpp_extensions/normalization.py
 +++ b/transformer_engine/jax/cpp_extensions/normalization.py
-@@ -192,7 +192,7 @@ class LayerNormFwdPrimitive(BasePrimitive):
+@@ -205,7 +205,7 @@ class LayerNormFwdPrimitive(BasePrimitive):
      @staticmethod
      def infer_sharding_from_operands(zero_centered_gamma, epsilon, mesh, arg_infos, result_infos):
          del zero_centered_gamma, epsilon, result_infos
@@ -272,7 +285,7 @@ index f1d3a7f..6702468 100644
          if x_spec[-1] is not None:
              warnings.warn(
                  f"Does not support to shard hidden dim in {LayerNormFwdPrimitive.name}! "
-@@ -206,7 +206,7 @@ class LayerNormFwdPrimitive(BasePrimitive):
+@@ -219,7 +219,7 @@ class LayerNormFwdPrimitive(BasePrimitive):
      @staticmethod
      def partition(zero_centered_gamma, epsilon, mesh, arg_infos, result_infos):
          del result_infos
@@ -281,7 +294,7 @@ index f1d3a7f..6702468 100644
          if x_spec[-1] is not None:
              warnings.warn(
                  f"Does not support to shard hidden dim in {LayerNormFwdPrimitive.name}! "
-@@ -471,14 +471,14 @@ class LayerNormBwdPrimitive(BasePrimitive):
+@@ -485,14 +485,14 @@ class LayerNormBwdPrimitive(BasePrimitive):
      @staticmethod
      def infer_sharding_from_operands(zero_centered_gamma, epsilon, mesh, arg_infos, result_infos):
          del zero_centered_gamma, epsilon, result_infos
@@ -298,7 +311,7 @@ index f1d3a7f..6702468 100644
          if g_b_spec[-1] is not None:
              warnings.warn(
                  f"{LayerNormBwdPrimitive.name} does not support sharding of gradients "
-@@ -493,14 +493,14 @@ class LayerNormBwdPrimitive(BasePrimitive):
+@@ -507,14 +507,14 @@ class LayerNormBwdPrimitive(BasePrimitive):
      @staticmethod
      def partition(zero_centered_gamma, epsilon, mesh, arg_infos, result_infos):
          del result_infos
@@ -315,12 +328,13 @@ index f1d3a7f..6702468 100644
          if g_b_spec[-1] is not None:
              warnings.warn(
                  f"{LayerNormBwdPrimitive.name} does not support sharding of gradients "
-@@ -519,8 +519,10 @@ class LayerNormBwdPrimitive(BasePrimitive):
+@@ -533,8 +533,11 @@ class LayerNormBwdPrimitive(BasePrimitive):
              local_dx, local_dgamma, local_dbeta = LayerNormBwdPrimitive.impl(
                  dz, x, mu, rsigma, gamma, zero_centered_gamma=zero_centered_gamma, epsilon=epsilon
              )
--            global_dgamma = all_reduce_sum_along_dp_fsdp(local_dgamma)
--            global_dbeta = all_reduce_sum_along_dp_fsdp(local_dbeta)
+-            global_dgamma = all_reduce_sum_along_dp_fsdp(local_dgamma, mesh)
+-            global_dbeta = all_reduce_sum_along_dp_fsdp(local_dbeta, mesh)
++
 +            #global_dgamma = all_reduce_sum_along_dp_fsdp(local_dgamma, mesh)
 +            global_dgamma = local_dgamma
 +            #global_dbeta = all_reduce_sum_along_dp_fsdp(local_dbeta, mesh)
@@ -328,7 +342,7 @@ index f1d3a7f..6702468 100644
              return local_dx, global_dgamma, global_dbeta
  
          return mesh, sharded_impl, out_shardings, arg_shardings
-@@ -687,7 +689,7 @@ class RmsNormFwdPrimitive(BasePrimitive):
+@@ -702,7 +705,7 @@ class RmsNormFwdPrimitive(BasePrimitive):
      @staticmethod
      def infer_sharding_from_operands(epsilon, mesh, arg_infos, result_infos):
          del epsilon, result_infos
@@ -337,7 +351,7 @@ index f1d3a7f..6702468 100644
          if x_spec[-1] is not None:
              warnings.warn(
                  f"Does not support to shard hidden dim in {RmsNormFwdPrimitive.name}! "
-@@ -877,14 +879,14 @@ class RmsNormBwdPrimitive(BasePrimitive):
+@@ -893,14 +896,14 @@ class RmsNormBwdPrimitive(BasePrimitive):
      @staticmethod
      def infer_sharding_from_operands(epsilon, mesh, arg_infos, result_infos):
          del epsilon, result_infos
@@ -354,7 +368,7 @@ index f1d3a7f..6702468 100644
          if g_spec[-1] is not None:
              warnings.warn(
                  f"{RmsNormBwdPrimitive.name} does not support sharding of parameter gamma "
-@@ -897,14 +899,14 @@ class RmsNormBwdPrimitive(BasePrimitive):
+@@ -913,14 +916,14 @@ class RmsNormBwdPrimitive(BasePrimitive):
      @staticmethod
      def partition(epsilon, mesh, arg_infos, result_infos):
          del result_infos
@@ -371,7 +385,7 @@ index f1d3a7f..6702468 100644
          if g_spec[-1] is not None:
              warnings.warn(
                  f"{RmsNormBwdPrimitive.name} does not support sharding of parameter gamma "
-@@ -1152,7 +1154,7 @@ class LayerNormFwdFp8Primitive(BasePrimitive):
+@@ -1169,7 +1172,7 @@ class LayerNormFwdFp8Primitive(BasePrimitive):
          out_dtype, zero_centered_gamma, epsilon, mesh, arg_infos, result_infos
      ):
          del out_dtype, zero_centered_gamma, epsilon, result_infos
@@ -380,7 +394,7 @@ index f1d3a7f..6702468 100644
          if x_spec[-1] is not None:
              warnings.warn(
                  f"Does not support to shard hidden dim in {LayerNormFwdPrimitive.name}! "
-@@ -1162,15 +1164,15 @@ class LayerNormFwdFp8Primitive(BasePrimitive):
+@@ -1179,15 +1182,15 @@ class LayerNormFwdFp8Primitive(BasePrimitive):
  
          out_sharding = NamedSharding(mesh, PartitionSpec(*x_spec[:-1], None))
          mu_sharding = rsigma_sharding = NamedSharding(mesh, PartitionSpec(*x_spec[:-1]))
@@ -400,7 +414,7 @@ index f1d3a7f..6702468 100644
          if x_spec[-1] is not None:
              warnings.warn(
                  f"Does not support to shard hidden dim in {LayerNormFwdFp8Primitive.name}! "
-@@ -1192,9 +1194,9 @@ class LayerNormFwdFp8Primitive(BasePrimitive):
+@@ -1209,9 +1212,9 @@ class LayerNormFwdFp8Primitive(BasePrimitive):
          b_sharding = NamedSharding(mesh, PartitionSpec(None))
          out_sharding = x_sharding
          mu_sharding = rsigma_sharding = NamedSharding(
@@ -412,7 +426,7 @@ index f1d3a7f..6702468 100644
          fp8_meta_sharding = amax_sharding
          arg_shardings = (x_sharding, g_sharding, b_sharding) + (fp8_meta_sharding,) * 3
          out_shardings = (out_sharding, mu_sharding, rsigma_sharding, amax_sharding)
-@@ -1422,7 +1424,7 @@ class RmsNormFwdFp8Primitive(BasePrimitive):
+@@ -1440,7 +1443,7 @@ class RmsNormFwdFp8Primitive(BasePrimitive):
      @staticmethod
      def infer_sharding_from_operands(out_dtype, epsilon, mesh, arg_infos, result_infos):
          del out_dtype, epsilon, result_infos
@@ -421,7 +435,7 @@ index f1d3a7f..6702468 100644
          if x_spec[-1] is not None:
              warnings.warn(
                  f"Does not support to shard hidden dim in {RmsNormFwdFp8Primitive.name}! "
-@@ -1431,14 +1433,14 @@ class RmsNormFwdFp8Primitive(BasePrimitive):
+@@ -1449,14 +1452,14 @@ class RmsNormFwdFp8Primitive(BasePrimitive):
              )
          out_sharding = NamedSharding(mesh, PartitionSpec(*x_spec[:-1], None))
          rsigma_sharding = NamedSharding(mesh, PartitionSpec(*x_spec[:-1]))
@@ -439,7 +453,7 @@ index f1d3a7f..6702468 100644
          if x_spec[-1] is not None:
              warnings.warn(
                  f"Does not support to shard hidden dim in {RmsNormFwdFp8Primitive.name}! "
-@@ -1453,8 +1455,8 @@ class RmsNormFwdFp8Primitive(BasePrimitive):
+@@ -1471,8 +1474,8 @@ class RmsNormFwdFp8Primitive(BasePrimitive):
          x_sharding = NamedSharding(mesh, PartitionSpec(*x_spec[:-1], None))
          g_sharding = NamedSharding(mesh, PartitionSpec(None))
          out_sharding = x_sharding
@@ -451,7 +465,7 @@ index f1d3a7f..6702468 100644
          arg_shardings = (x_sharding, g_sharding) + (fp8_meta_sharding,) * 3
          out_shardings = (out_sharding, rsigma_sharding, amax_sharding)
 diff --git a/transformer_engine/jax/cpp_extensions/quantization.py b/transformer_engine/jax/cpp_extensions/quantization.py
-index 2c529e7..1f59f3a 100644
+index 48bf4d9..4dfe50a 100644
 --- a/transformer_engine/jax/cpp_extensions/quantization.py
 +++ b/transformer_engine/jax/cpp_extensions/quantization.py
 @@ -139,17 +139,17 @@ class CastFP8Primitive(BasePrimitive):
@@ -519,10 +533,10 @@ index bf92c00..2e07614 100644
              warnings.warn(
                  f"Sharding the hidden dimension is not supported in {cls.name}! "
 diff --git a/transformer_engine/jax/cpp_extensions/transpose.py b/transformer_engine/jax/cpp_extensions/transpose.py
-index cc64951..8c735dd 100644
+index 963d7f0..c304580 100644
 --- a/transformer_engine/jax/cpp_extensions/transpose.py
 +++ b/transformer_engine/jax/cpp_extensions/transpose.py
-@@ -168,7 +168,7 @@ class TransposePrimitive(BasePrimitive):
+@@ -170,7 +170,7 @@ class TransposePrimitive(BasePrimitive):
          static_axis_boundary, transpose_axis_boundary, mesh, arg_infos, result_infos
      ):
          del result_infos
@@ -531,7 +545,7 @@ index cc64951..8c735dd 100644
          xt_spec = multidim_transpose(x_spec, static_axis_boundary, transpose_axis_boundary)
          transposed_x_sharding = NamedSharding(mesh, PartitionSpec(*xt_spec))
          return transposed_x_sharding
-@@ -176,7 +176,7 @@ class TransposePrimitive(BasePrimitive):
+@@ -178,7 +178,7 @@ class TransposePrimitive(BasePrimitive):
      @staticmethod
      def partition(static_axis_boundary, transpose_axis_boundary, mesh, arg_infos, result_infos):
          del result_infos
@@ -540,7 +554,7 @@ index cc64951..8c735dd 100644
          xt_spec = multidim_transpose(x_spec, static_axis_boundary, transpose_axis_boundary)
          transposed_x_sharding = NamedSharding(mesh, PartitionSpec(*xt_spec))
          arg_shardings = tuple(arg_i.sharding for arg_i in arg_infos)
-@@ -354,11 +354,11 @@ class CastTransposePrimitive(BasePrimitive):
+@@ -360,11 +360,11 @@ class CastTransposePrimitive(BasePrimitive):
          out_dtype, static_axis_boundary, transpose_axis_boundary, mesh, arg_infos, result_infos
      ):
          del out_dtype, result_infos
@@ -554,7 +568,7 @@ index cc64951..8c735dd 100644
          return (casted_x_sharding, casted_transposed_x_sharding, amax_sharding)
  
      @staticmethod
-@@ -366,11 +366,11 @@ class CastTransposePrimitive(BasePrimitive):
+@@ -372,11 +372,11 @@ class CastTransposePrimitive(BasePrimitive):
          out_dtype, static_axis_boundary, transpose_axis_boundary, mesh, arg_infos, result_infos
      ):
          del result_infos
@@ -568,7 +582,7 @@ index cc64951..8c735dd 100644
          arg_shardings = tuple(arg_i.sharding for arg_i in arg_infos)
          out_shardings = (casted_x_sharding, casted_transposed_x_sharding, amax_sharding)
  
-@@ -597,14 +597,14 @@ class DBiasCastTransposePrimitive(BasePrimitive):
+@@ -603,14 +603,14 @@ class DBiasCastTransposePrimitive(BasePrimitive):
          out_dtype, static_axis_boundary, transpose_axis_boundary, mesh, arg_infos, result_infos
      ):
          del out_dtype, result_infos
@@ -585,7 +599,7 @@ index cc64951..8c735dd 100644
          return (out_sharding, tranposed_out_sharding, dbias_shaprding, amax_sharding)
  
      @staticmethod
-@@ -612,7 +612,7 @@ class DBiasCastTransposePrimitive(BasePrimitive):
+@@ -618,7 +618,7 @@ class DBiasCastTransposePrimitive(BasePrimitive):
          out_dtype, static_axis_boundary, transpose_axis_boundary, mesh, arg_infos, result_infos
      ):
          del result_infos
@@ -594,7 +608,7 @@ index cc64951..8c735dd 100644
          casted_x_sharding = NamedSharding(mesh, PartitionSpec(*x_spec))
          xt_spec = multidim_transpose(x_spec, static_axis_boundary, transpose_axis_boundary)
          casted_transposed_x_sharding = NamedSharding(mesh, PartitionSpec(*xt_spec))
-@@ -621,7 +621,7 @@ class DBiasCastTransposePrimitive(BasePrimitive):
+@@ -627,7 +627,7 @@ class DBiasCastTransposePrimitive(BasePrimitive):
              mesh, PartitionSpec(*x_spec[: static_axis_boundary + 1], x_spec[-1])
          )
  
@@ -603,7 +617,7 @@ index cc64951..8c735dd 100644
          arg_shardings = tuple(arg_i.sharding for arg_i in arg_infos)
          out_shardings = (
              casted_x_sharding,
-@@ -922,14 +922,14 @@ class DActLuDBiasCastTransposePrimitive(BasePrimitive):
+@@ -928,14 +928,14 @@ class DActLuDBiasCastTransposePrimitive(BasePrimitive):
          result_infos,
      ):
          del out_dtype, result_infos, act_enum
@@ -620,7 +634,7 @@ index cc64951..8c735dd 100644
          return (out_sharding, tranposed_out_sharding, dbias_shaprding, amax_sharding)
  
      @staticmethod
-@@ -943,7 +943,7 @@ class DActLuDBiasCastTransposePrimitive(BasePrimitive):
+@@ -949,7 +949,7 @@ class DActLuDBiasCastTransposePrimitive(BasePrimitive):
          result_infos,
      ):
          del result_infos
@@ -629,7 +643,7 @@ index cc64951..8c735dd 100644
          casted_x_sharding = NamedSharding(mesh, PartitionSpec(*x_spec))
          xt_spec = multidim_transpose(x_spec, static_axis_boundary, transpose_axis_boundary)
          casted_transposed_x_sharding = NamedSharding(mesh, PartitionSpec(*xt_spec))
-@@ -952,7 +952,7 @@ class DActLuDBiasCastTransposePrimitive(BasePrimitive):
+@@ -958,7 +958,7 @@ class DActLuDBiasCastTransposePrimitive(BasePrimitive):
              mesh, PartitionSpec(*x_spec[: static_axis_boundary + 1], x_spec[-1])
          )
  
@@ -638,7 +652,7 @@ index cc64951..8c735dd 100644
          arg_shardings = tuple(arg_i.sharding for arg_i in arg_infos)
          out_shardings = (
              casted_x_sharding,
-@@ -1189,22 +1189,22 @@ class DgatedActLuCastTransposePrimitive(BasePrimitive):
+@@ -1195,22 +1195,22 @@ class DgatedActLuCastTransposePrimitive(BasePrimitive):
          out_dtype, static_axis_boundary, act_enum, mesh, arg_infos, result_infos
      ):
          del out_dtype, result_infos, act_enum
@@ -666,10 +680,10 @@ index cc64951..8c735dd 100644
          out_shardings = (casted_x_sharding, casted_transposed_x_sharding, amax_sharding)
  
 diff --git a/transformer_engine/jax/csrc/utils.h b/transformer_engine/jax/csrc/utils.h
-index fd3ebe8..6efbda5 100644
+index 32de33b..12b3cd3 100644
 --- a/transformer_engine/jax/csrc/utils.h
 +++ b/transformer_engine/jax/csrc/utils.h
-@@ -33,7 +33,7 @@ uint32_t GetRuntimeNumSegments(void *cu_seqlen, void *workspace, size_t len, cud
+@@ -34,7 +34,7 @@ uint32_t GetRuntimeNumSegments(void *cu_seqlen, void *workspace, size_t len, cud
  class cudaDevicePropertiesManager {
   public:
    static cudaDevicePropertiesManager &Instance() {
@@ -678,7 +692,7 @@ index fd3ebe8..6efbda5 100644
      return instance;
    }
  
-@@ -65,7 +65,7 @@ class cudaDevicePropertiesManager {
+@@ -66,7 +66,7 @@ class cudaDevicePropertiesManager {
  class FusedAttnOffsetManager {
   public:
    static FusedAttnOffsetManager &Instance() {
@@ -688,7 +702,7 @@ index fd3ebe8..6efbda5 100644
    }
  
 diff --git a/transformer_engine/jax/fp8.py b/transformer_engine/jax/fp8.py
-index 4766203..1a86347 100644
+index 5df8ce4..53b960e 100644
 --- a/transformer_engine/jax/fp8.py
 +++ b/transformer_engine/jax/fp8.py
 @@ -78,7 +78,7 @@ def _format2dtypes(format_: Format):
@@ -713,25 +727,10 @@ index 2651144..c437f6a 100644
      # Deprecated parameters
      num_heads: Optional[int] = None
 diff --git a/transformer_engine/jax/sharding.py b/transformer_engine/jax/sharding.py
-index c0b60fe..8181118 100644
+index a14a838..16d87ab 100644
 --- a/transformer_engine/jax/sharding.py
 +++ b/transformer_engine/jax/sharding.py
-@@ -30,9 +30,11 @@ W_TP_AXES = "nvte_w_tp"
- W_JOINED_AXES = "nvte_w_joined"
- 
- 
--def _get_mesh_info(resource: str):
--    mesh = _PXLA_THREAD_RESOURCES.env.physical_mesh
--    assert resource in mesh.axis_names, f"{resource} is not in the axis_names of Mesh {mesh}."
-+
-+def _get_mesh_info(resource: str, mesh):
-+    mesh = mesh or _PXLA_THREAD_RESOURCES.env.physical_mesh
-+    assert resource in mesh.axis_names, \
-+        f"{resource} is not in the axis_names of Mesh {mesh}."
-     return mesh.shape[resource], resource
- 
- 
-@@ -122,7 +124,7 @@ def get_all_mesh_axes():
+@@ -123,7 +123,7 @@ def get_all_mesh_axes():
      return mesh.axis_names
  
  
@@ -740,39 +739,16 @@ index c0b60fe..8181118 100644
      """
      Get padded spec for partitioning from arguments' information
      """
-@@ -132,12 +134,12 @@ def get_padded_spec(spec, ndim):
-     return spec + (None,) * (ndim - len(spec))
- 
- 
--def lax_paral_op(x: jnp.array, ops: Callable, mesh_resource: str):
-+def lax_paral_op(x: jnp.array, ops: Callable, mesh_resource: str, mesh):
-     """
-     A wrapper function to invoke lax.p* operations, like psum.
-     """
+@@ -142,6 +142,7 @@ def lax_paral_op(
      if mesh_resource is not None:
--        _, resource = _get_mesh_info(mesh_resource)
-+        _, resource = _get_mesh_info(mesh_resource, mesh)
-         return ops(x, resource)
+         _, resource = _get_mesh_info(mesh_resource, mesh)
+         return ops(x, resource, **kwargs)
++
      return x
  
-@@ -201,12 +203,12 @@ def global_mesh_resource() -> MeshResource:
-     return _GLOBAL_MESH_RESOURCE
  
- 
--def all_reduce_sum_along_dp_fsdp(x: jnp.array):
-+def all_reduce_sum_along_dp_fsdp(x: jnp.array, mesh):
-     """
-     All-Reduce (Sum) along DP and FSDP mesh axes.
-     """
--    x = lax_paral_op(x, jax.lax.psum, global_mesh_resource().dp_resource)
--    return lax_paral_op(x, jax.lax.psum, global_mesh_resource().fsdp_resource)
-+    x = lax_paral_op(x, jax.lax.psum, global_mesh_resource().dp_resource, mesh)
-+    return lax_paral_op(x, jax.lax.psum, global_mesh_resource().fsdp_resource, mesh)
- 
- 
- def all_reduce_max_along_all_axes_except_PP(x: jnp.array):
 diff --git a/transformer_engine/paddle/csrc/common.h b/transformer_engine/paddle/csrc/common.h
-index 60f06a2..dc09ae7 100644
+index 6ce2504..60a0cad 100644
 --- a/transformer_engine/paddle/csrc/common.h
 +++ b/transformer_engine/paddle/csrc/common.h
 @@ -142,7 +142,7 @@ inline NVTE_Fused_Attn_Backend get_fused_attn_backend(

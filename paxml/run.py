@@ -88,21 +88,21 @@ xla.add_argument(
 
 xla.add_argument(
     "--dump-all-passes",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to dump all intermediate HLO modules",
 )
 
 xla.add_argument(
     "--debug-nccl",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to print NCCL debug information",
 )
 
 xla.add_argument(
     "--use-nccl-comm-split",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to use comm split to create communicators",
 )
@@ -159,14 +159,14 @@ legate_jax.add_argument(
 
 legate_jax.add_argument(
     "--erase-explicit-sharding",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to erase explicit sharding in the module and only use autosharding",  # noqa: E501
 )
 
 legate_jax.add_argument(
     "--max-replica-sharding",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to rearrange the task mesh to shard as much as possible over the replica dimension even when pure model parallelism is requested",  # noqa: E501
 )
@@ -208,8 +208,8 @@ legate_jax.add_argument(
 
 legate_jax.add_argument(
     "--strict-static-order",
-    action="store_true",
-    default=False,
+    action=argparse.BooleanOptionalAction,
+    default=True,
     help="Whether to force tasks to follow a pre-defined static order",
 )
 
@@ -225,13 +225,6 @@ legate_jax.add_argument(
     type=int,
     default=1,
     help="The amount of interleaving (circular scheduling)",
-)
-
-legate_jax.add_argument(
-    "--distribute-embeddings",
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help="Whether to distribute embeddings computation across all GPUs or include in Layer 0",  # noqa: E501
 )
 
 legate_jax.add_argument(
@@ -251,16 +244,15 @@ legate_jax.add_argument(
 
 legate_jax.add_argument(
     "--only-fuse-loop-tasks",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     default=False,
     help="Only fuse tasks inside loops",
 )
 
 legate_jax.add_argument(
-    "--disable-task-fusion",
-    action="store_false",
+    "--task-fusion",
+    action=argparse.BooleanOptionalAction,
     default=True,
-    dest="enable_task_fusion",
     help="Only fuse tasks inside loops",
 )
 
@@ -280,7 +272,7 @@ legate_jax.add_argument(
 
 legate_jax.add_argument(
     "--dump-hlo",
-    action="store_true",
+    action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to dump HLO modules without full execution",
 )
@@ -323,16 +315,10 @@ paxml.add_argument(
 )
 
 paxml.add_argument(
-    "--no-fuse-embeddings",
-    action="store_true",
+    "--fuse-embeddings",
+    default=True,
+    action=argparse.BooleanOptionalAction,
     help="Whether to prevent the embeddings/logits layers from fusing with transformer layers",  # noqa: E501
-)
-
-paxml.add_argument(
-    "--common-autosharding",
-    action="store_true",
-    default=False,
-    help="Whether all layers should share a common autosharding scheme mapping logical->device axes",  # noqa: E501
 )
 
 paxml.add_argument(
@@ -395,11 +381,13 @@ paxml.add_argument(
 args, realm_argv = parser.parse_known_args()
 
 if args.te:
-  if args.tp == 1:
-    raise Exception("TransformerEngine (--te) requires tensor parallelism (--tp) > 1")
-  os.environ["ENABLE_TE"] = "1"
-  os.environ["ENABLE_TE_SP"] = "1"
-  os.environ["NVTE_FUSED_ATTN"] = "1"
+    if args.tp == 1:
+        raise Exception(
+            "TransformerEngine (--te) requires tensor parallelism (--tp) > 1"
+        )
+    os.environ["ENABLE_TE"] = "1"
+    os.environ["ENABLE_TE_SP"] = "1"
+    os.environ["NVTE_FUSED_ATTN"] = "1"
 
 
 if args.host_offload_min_reuse_distance > 0 and args.gpus > args.cpus:
@@ -520,13 +508,6 @@ num_stages = num_stages_per_interleave * args.interleave
 layers_per_stage = args.num_layers // num_stages
 layers_per_interleave = args.num_layers // args.interleave
 
-if args.distribute_embeddings or args.load_balance_embeddings:
-    logits_num_devices = total_devices
-    embeddings_num_devices = total_devices
-else:
-    logits_num_devices = transformer_num_devices
-    embeddings_num_devices = transformer_num_devices
-
 if batch_size % total_devices:
     raise ValueError(
         f"No support for partial batches, gpus={total_devices} "
@@ -546,8 +527,6 @@ for key, val in env.items():
 class PaxTransformerConfig:
     num_devices: int = -1
     transformer_num_devices: int = -1
-    logits_num_devices: int = -1
-    embeddings_num_devices: int = -1
     layers_per_stage: int = -1
     layers_per_interleave: Optional[int] = None
 
@@ -565,13 +544,11 @@ class PaxTransformerConfig:
             )
 
         if args.load_balance_embeddings:
-            loop_dependent_embeddings_submesh_size = transformer_num_devices
-            loop_dependent_logits_submesh_size = transformer_num_devices
-            embeddings_submesh_num_devices = transformer_num_devices
+            loop_dependent_submesh_size = transformer_num_devices
+            num_devices_for_all_loops = self.num_devices
         else:
-            loop_dependent_embeddings_submesh_size = None
-            loop_dependent_logits_submesh_size = None
-            embeddings_submesh_num_devices = self.embeddings_num_devices
+            loop_dependent_submesh_size = None
+            num_devices_for_all_loops = transformer_num_devices
 
         transformer_x_dim = args.dp
         transformer_y_dim = args.fsdp
@@ -603,56 +580,6 @@ class PaxTransformerConfig:
             transformer_z_dim,
         ]
 
-        embedding_x_dim = args.dp
-
-        if args.sequence_parallel:
-            embedding_y_dim = (
-                embeddings_submesh_num_devices // embedding_x_dim // args.tp
-            )
-            embedding_z_dim = args.tp
-            # favor the seq dimension when sharding activations
-            # shard batch dimension on x-axis
-            # shard sequence dimension on y-axis and z-axis
-            # shard vocab dimension on z-axis
-            embeddings_axes = [
-                ("replica", "x"),
-                ("seq", "y"),
-                ("seq", "z"),
-                ("mdl", "z"),
-            ]
-        else:
-            embedding_y_dim = 1
-            embedding_z_dim = embeddings_submesh_num_devices // embedding_x_dim
-            # shard batch and hidden dimensions on x-axis
-            # shard vocab dimension on z-axis
-            embeddings_axes = [
-                ("replica", "x"),
-                ("data", "y"),
-                ("mdl", "z"),
-                # we minimally need to shard on z dimension here
-                # to ensure that input batches are fully sharded
-                ("seq", "z"),
-            ]
-
-        if args.common_autosharding:
-            embeddings_axes = transformer_axes
-            embeddings_mesh = [
-                transformer_x_dim,
-                transformer_y_dim,
-                transformer_z_dim,
-            ]
-            embeddings_device_axes = ["x", "y", "z"]
-            # the embeddings have a few extra things, make sure arrays
-            # are fully shared over the replica/data dimension
-            embeddings_axes.append(("data", "z"))
-        else:
-            embeddings_mesh = [
-                embedding_x_dim,
-                embedding_y_dim,
-                embedding_z_dim,
-            ]
-            embeddings_device_axes = ["x", "y", "z"]
-
         def compute_devices(name: str):
             layer = int(layer_regex.search(name).groups()[0])
             if self.layers_per_interleave is not None:
@@ -663,10 +590,10 @@ class PaxTransformerConfig:
             stop = offset + self.transformer_num_devices
             return list(range(offset, stop))
 
-        if args.no_fuse_embeddings:
-            fusion_color = 42
-        else:
+        if args.fuse_embeddings:
             fusion_color = 0
+        else:
+            fusion_color = 42
 
         register_task(
             r"(layers_\d+)",
@@ -677,51 +604,47 @@ class PaxTransformerConfig:
             fusion_color=fusion_color,
         )
 
-        register_task(
-            "(emb_lookup).*",
-            devices=devices[: self.embeddings_num_devices],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-            loop_submesh_size=loop_dependent_embeddings_submesh_size,
-        )
+        first_layer_devices = devices[:num_devices_for_all_loops]
+        last_layer_devices = devices[-num_devices_for_all_loops:]
 
-        register_task(
-            "(position_emb).*",
-            devices=devices[: self.embeddings_num_devices],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-            loop_submesh_size=loop_dependent_embeddings_submesh_size,
-        )
+        layer_meshes = {
+            "(emb)_lookup.*": (
+                first_layer_devices,
+                loop_dependent_submesh_size,
+                False,
+            ),
+            "position_(emb).*": (
+                first_layer_devices,
+                loop_dependent_submesh_size,
+                False,
+            ),
+            "(final_ln).*": (
+                last_layer_devices,
+                loop_dependent_submesh_size,
+                True,
+            ),
+            "(compute_loss).*": (
+                last_layer_devices,
+                loop_dependent_submesh_size,
+                True,
+            ),
+            "default": (devices[:transformer_num_devices], None, False),
+        }
 
-        register_task(
-            "(final_ln).*",
-            devices=devices[-self.logits_num_devices :],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-            loop_submesh_size=loop_dependent_logits_submesh_size,
-            loop_submesh_reverse=True,
-        )
-
-        register_task(
-            "(compute_loss).*",
-            devices=devices[-self.logits_num_devices :],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-            loop_submesh_size=loop_dependent_logits_submesh_size,
-            loop_submesh_reverse=True,
-        )
-
-        register_task(
-            "default",
-            devices=devices[:embeddings_submesh_num_devices],
-            dims=embeddings_mesh,
-            device_axes=embeddings_device_axes,
-            logical_axes=embeddings_axes,
-        )
+        for layer, (
+            devices,
+            loop_submesh_size,
+            submesh_rotation,
+        ) in layer_meshes.items():
+            register_task(
+                layer,
+                devices=devices,
+                dims=transformer_mesh,
+                device_axes=["x", "y", "z"],
+                logical_axes=transformer_axes,
+                loop_submesh_size=loop_submesh_size,
+                loop_submesh_reverse=submesh_rotation,
+            )
 
 
 # this needs to come later after the env has been fully set up
@@ -738,8 +661,6 @@ PaxLegateConfig:
 PaxTransformerConfig:
   num_devices = {total_devices}
   transformer_num_devices = {transformer_num_devices}
-  logits_num_devices = {logits_num_devices}
-  embeddings_num_devices = {embeddings_num_devices}
   layers_per_stage = {layers_per_stage}
   layers_per_interleave = {layers_per_interleave}
 
@@ -793,6 +714,7 @@ argv = [
     "--fdl.LAMBADA_TRAIN=True",
     "--fdl.REMAT=True",
     f'--fdl.CHECKPOINT_POLICY="{args.remat}"',
+    f'--fdl.CLIP_GRADIENT_NORM_TO_VALUE=0.0',
     f"--fdl.SUMMARY_INTERVAL_STEPS={args.num_steps}",
     f"--fdl.MAX_STEPS={args.num_steps}",
     "--fdl.EVAL_INTERVAL_STEPS=0",
@@ -826,18 +748,13 @@ elif args.optimizer == "sgd":
     argv.append("--fdl.USE_SGD=True")
 
 # always enable recomputation
-with legate.jax.enable_recomputation(
-    True
-) as A, legate.jax.only_fuse_loop_tasks(
-    args.only_fuse_loop_tasks
-) as B, legate.jax.store_cache_min_parallelism(
-    args.cache_parallelism
-) as C, legate.jax.strict_static_order(
-    args.strict_static_order
-) as D, legate.jax.host_offload_min_reuse_distance(
-    args.host_offload_min_reuse_distance
-) as E, legate.jax.enable_task_fusion(
-    args.enable_task_fusion
+with legate.jax.context(
+    enable_recomputation=True,
+    only_fuse_loop_tasks=args.only_fuse_loop_tasks,
+    store_cache_min_parallelism=args.cache_parallelism,
+    strict_static_order=args.strict_static_order,
+    host_offload_min_reuse_distance=args.host_offload_min_reuse_distance,
+    enable_task_fusion=args.task_fusion,
 ):
     legate.jax.replicate_parameters_smaller_than_num_elements(
         batch_size * args.sequence_length
