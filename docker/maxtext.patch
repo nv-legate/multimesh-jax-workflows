@@ -1,5 +1,5 @@
 diff --git a/MaxText/configs/base.yml b/MaxText/configs/base.yml
-index 4c4a6751..4e75cfe6 100644
+index 4c4a6751..6175cc1e 100644
 --- a/MaxText/configs/base.yml
 +++ b/MaxText/configs/base.yml
 @@ -330,7 +330,7 @@ data_shuffle_seed: 0
@@ -7,7 +7,7 @@ index 4c4a6751..4e75cfe6 100644
 
  # You may disable clipping by setting gradient_clipping_threshold to zero.
 -gradient_clipping_threshold: 1.0
-+gradient_clipping_threshold: 0
++gradient_clipping_threshold: 0.0
 
  # Instead of updating the weights every step, you may effectively use a larger
  # batch by accumulating the gradient over a set of steps.
@@ -185,7 +185,7 @@ index 897674e2..ca9caec5 100644
      model,
      data_iterator,
 diff --git a/MaxText/maxtext_utils.py b/MaxText/maxtext_utils.py
-index 7e93ad06..a4d74d80 100644
+index 7e93ad06..81924026 100644
 --- a/MaxText/maxtext_utils.py
 +++ b/MaxText/maxtext_utils.py
 @@ -19,9 +19,17 @@ limitations under the License.
@@ -206,7 +206,7 @@ index 7e93ad06..a4d74d80 100644
 
 
  import pickle
-@@ -30,6 +38,136 @@ from input_pipeline import input_pipeline_interface
+@@ -30,6 +38,126 @@ from input_pipeline import input_pipeline_interface
 
  OVERWRITE_WITH_GRADIENT = "_overwrite_with_gradient"
 
@@ -271,17 +271,7 @@ index 7e93ad06..a4d74d80 100644
 +  return compiled
 +
 +def get_and_compile_functional_train_with_signature(train_step, mesh, state_mesh_annotations, model, config, shaped_train_args):
-+
-+  transformer_shape = [
-+      config.ici_data_parallelism,
-+      1, # config.ici_pipeline_parallelism,
-+      config.ici_fsdp_parallelism,
-+      config.ici_fsdp_transpose_parallelism,
-+      config.ici_sequence_parallelism,
-+      config.ici_tensor_parallelism,
-+      config.ici_expert_parallelism,
-+      config.ici_autoregressive_parallelism,
-+  ]
++  transformer_shape = [(size if (name != 'stage') else 1) for name, size in mesh.shape.items()]
 +  mesh = MeshWrapper(mesh, transformer_shape)
 +
 +  """Get the shardings (both state and data) for train_step"""
@@ -343,6 +333,19 @@ index 7e93ad06..a4d74d80 100644
 
  def get_functional_train_with_signature(train_step, mesh, state_mesh_annotations, model, config):
    """Get the shardings (both state and data) for train_step"""
+diff --git a/MaxText/optimizers.py b/MaxText/optimizers.py
+index 6d42644f..332a9590 100644
+--- a/MaxText/optimizers.py
++++ b/MaxText/optimizers.py
+@@ -45,6 +45,8 @@ def get_optimizer(config, learning_rate_schedule):
+         epsilon_root=config.adam_eps_root,
+         weight_decay=config.adam_weight_decay,
+     )
++  elif config.opt_type == "sgd":
++    return optax.sgd(learning_rate_schedule)
+   else:
+     raise ValueError(f"{config.opt_type=} is not a supported.")
+
 diff --git a/MaxText/pyconfig.py b/MaxText/pyconfig.py
 index 2ff2926e..7b6afaa6 100644
 --- a/MaxText/pyconfig.py
@@ -386,7 +389,7 @@ index 2ff2926e..7b6afaa6 100644
        num_stages = int(raw_keys["ici_pipeline_parallelism"] * raw_keys["dcn_pipeline_parallelism"])
        if raw_keys["num_pipeline_repeats"] == -1:
 diff --git a/MaxText/train.py b/MaxText/train.py
-index 182dd75e..013cd5a5 100644
+index 182dd75e..c173896a 100644
 --- a/MaxText/train.py
 +++ b/MaxText/train.py
 @@ -26,7 +26,7 @@ import sys
@@ -437,15 +440,17 @@ index 182dd75e..013cd5a5 100644
 
  def clear_buffered_metrics():
    global _buffered_step
-@@ -300,7 +302,7 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
+@@ -300,8 +302,8 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
    # Mask out paddings at the end of each example.
    xent = xent * (data["targets_segmentation"] != 0)
    total_loss = jnp.sum(xent)
 -  total_weights = jnp.sum(data["targets_segmentation"] != 0)
+-  loss = total_loss / (total_weights + EPS)
 +  total_weights = 1.0 #jnp.sum(data["targets_segmentation"] != 0)
-   loss = total_loss / (total_weights + EPS)
++  loss = total_loss #/ (total_weights + EPS)
    # get moe load balance loss
    moe_lb_loss = 0.0
+   if config.num_experts > 1:
 @@ -318,6 +320,22 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
    return loss, aux
 
@@ -460,9 +465,9 @@ index 182dd75e..013cd5a5 100644
 +
 +microbatch_config = MicrobatchConfig()
 +
-+def set_mb_config(mb_size, scheduler, num_stages, interleave):
++def set_mb_config(mb_size, schedule, num_stages, interleave):
 +    microbatch_config.size = mb_size
-+    microbatch_config.scheduler = scheduler
++    microbatch_config.schedule = schedule
 +    microbatch_config.num_stages = num_stages
 +    microbatch_config.interleave = interleave
 +

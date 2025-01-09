@@ -34,7 +34,7 @@ numactl --physcpubind $cpu_binding \
 python `pwd`/run.py \
     --cpus 1 \
     --gpus 1 \
-    --fbmem 73 \
+    --fbmem 77 \
     --nodes 64 \
     --pp 8 \
     --tp 8 \
@@ -42,7 +42,6 @@ python `pwd`/run.py \
     --fsdp 1 \
     --num-layers 96 \
     --interleave 12 \
-    --maxtext-config base.yml \
     --model-name gpt3-175b \
     --model-dims 12288 \
     --num-heads 96 \
@@ -57,7 +56,7 @@ python `pwd`/run.py \
     --replicate-small-params \
     --schedule wavefront \
     --load-balance-embeddings \
-    --sequence-parallel \
+    --no-sequence-parallel \
     --autoshard \
     --num-steps 8 \
     --backend legate \
