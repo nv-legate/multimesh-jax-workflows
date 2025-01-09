@@ -230,7 +230,7 @@ legate_jax.add_argument(
 legate_jax.add_argument(
     "--schedule",
     type=str,
-    choices=["fill-drain", "gpipe", "1f1b", "wavefront"],
+    choices=["fill-drain", "gpipe", "1f1b", "wavefront", "prefetch-wavefront"],
     help="The microbatch schedule to use",
 )
 legate_jax.add_argument(
@@ -569,7 +569,9 @@ if args.num_layers is None:
     layers_per_stage = None
     layers_per_interleave = None
     if args.pp > 1:
-        raise Exception("please specify --num-layers for configuring pipeline parallelism with --pp > 1")
+        raise Exception(
+            "please specify --num-layers for configuring pipeline parallelism with --pp > 1"
+        )
 else:
     base_num_decoder_layers = args.num_layers
     layers_per_stage = base_num_decoder_layers // num_stages
@@ -665,7 +667,7 @@ if args.backend == "legate":
             logical_axes=transformer_axes,
         )
     else:  # pp > 1 or microbatching
-        train.set_mb_config(mb_size, args.schedule, num_stages, args.interleave)
+        train.set_mb_config(global_mb_size, args.schedule, num_stages, args.interleave)
         layer_regex = re.compile(r"layers_(\d+)")
 
         def compute_devices(name: str):
@@ -745,7 +747,7 @@ argv = [
     f"per_device_batch_size={per_device_batch_size}",
 ]
 
-if args.model_name is not None:
+if args.model_name is None:
     argv.append(f"use_iota_embed={args.use_iota_embed}")
     argv.append(f"logits_dot_in_fp32={args.logits_dot_in_fp32}")
 
