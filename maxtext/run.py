@@ -170,7 +170,7 @@ legate_jax.add_argument(
     "--debug",
     type=str,
     default=None,
-    choices=["info", "debug", "spew"],
+    choices=["none", "info", "debug", "spew"],
     help="The debug level",
 )
 legate_jax.add_argument(
@@ -462,7 +462,8 @@ if args.debug_nccl:
     vmodule.append("nccl_collective_thunk")
     vmodule.append("nccl_api")
 
-xla_debug = xla_debug_levels[args.debug]
+debug = None if args.debug == "none" else args.debug
+xla_debug = xla_debug_levels[debug]
 
 vmodule_str = ",".join([f"{root}={xla_debug}" for root in vmodule])
 if custom_vmodule := os.environ.get("TF_CPP_VMODULE", None):
@@ -619,7 +620,7 @@ if args.backend == "legate":
         fbmem=args.fbmem * 1000,
         zcmem=args.zcmem * 1000,
         network=args.network,
-        debug=args.debug,
+        debug=debug,
         profile=args.profile,
         realm_argv=realm_argv,
     )
@@ -740,7 +741,6 @@ argv = [
     str(config),
     "run_name=my_name",
     f"base_output_directory=${os.getcwd()}/logs",
-    "dataset_type=synthetic",
     "enable_single_controller=False",
     "enable_checkpointing=False",
     f"scan_layers={args.scan_layers}",
@@ -748,6 +748,7 @@ argv = [
 ]
 
 if args.model_name is None:
+    argv.append(f"dataset_type=synthetic")
     argv.append(f"use_iota_embed={args.use_iota_embed}")
     argv.append(f"logits_dot_in_fp32={args.logits_dot_in_fp32}")
 
@@ -829,16 +830,9 @@ with legate.jax.context(
 
     if args.hlo is None:
         import jaxlib
-
-        sys.argv = argv
+        #sys.argv = argv
         try:
-            if args.autoshard:
-                # invoke directly to preserve microbatch settings
-                train.main(argv)
-            else:
-                runpy.run_path(
-                    "/opt/maxtext/MaxText/train.py", run_name="__main__"
-                )  # noqa: E501
+            train.main(argv)
         except jaxlib.xla_extension.XlaRuntimeError as e:
             need_throw = True
             if args.dump_only:
