@@ -3,6 +3,8 @@
 import argparse
 import os
 import subprocess as sp
+import json
+from subprocess_tee import run
 
 parser = argparse.ArgumentParser(allow_abbrev=False)
 
@@ -57,6 +59,13 @@ parser.add_argument(
     choices=["Release", "Debug", "RelWithDebInfo"],
     default="Release",
     help="The type of CMake build to execute for Legate repos",
+)
+
+parser.add_argument(
+    "--validate",
+    type=str,
+    default=None,
+    help="The platform to run validation jobs on",
 )
 
 parser.add_argument(
@@ -117,8 +126,7 @@ for arg, value in (
 
 print(" ".join(cmds))
 
-output = sp.check_output(cmds)
-print(output)
+output = run(cmds)
 
 if args.upload:
     remote_image = f"{args.repo}/{image_name}"

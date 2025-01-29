@@ -1,4 +1,5 @@
 docker/target/*
+docker/cache/*
 paxml/logs/*
 paxml/target/*
 paxml/dump/*

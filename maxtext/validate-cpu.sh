@@ -20,8 +20,8 @@ python ./run.py \
    --tp 2 \
    --pp 2 \
    --fsdp 1 \
-   --num-layers 4 \
-   --interleave 2 \
+   --num-layers 2 \
+   --interleave 1 \
    --batch-size 8 \
    --microbatch-size 2 \
    --sequence-length 128 \

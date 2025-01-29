@@ -24,7 +24,7 @@ python ./run.py \
    --batch-size 4 \
    --microbatch-size 2 \
    --sequence-length 256 \
-   --num-steps 5 \
+   --num-steps 20 \
    --use-iota-embed \
    --xla-rs-threshold=51200 \
    --attention cudnn_flash_te \
@@ -36,4 +36,4 @@ python ./run.py \
    --dump-mpmd-passes \
    --autoshard \
    --backend legate \
-   --debug debug
+   --debug info
