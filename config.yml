@@ -1,0 +1,10 @@
+maxtext:
+  validate:
+    medium:
+      batch_size: 128
+      dp: 1
+      model: "gpt3-24layers"
+      num_layers: 16
+      base_N: 16
+      max_mean: 9.05
+      max_stdev: 0.1

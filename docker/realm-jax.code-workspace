@@ -1,0 +1,231 @@
+{
+  "folders": [
+    {
+      "path": "legate-jax",
+    },
+    {
+      "path": "xla",
+    },
+    {
+      "path": "zuku",
+    },
+    {
+      "path": "jax",
+    },
+    {
+      "path": "TransformerEngine",
+    },
+    {
+      "path": "legion"
+    },
+    {
+      "path": "paxml"
+    },
+    {
+      "path": "praxis"
+    },
+    {
+      "path": "flax"
+    },
+    {
+      "path": "maxtext"
+    },
+  ],
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Compile Legate-Jax",
+        "type": "shell",
+        "group": "build",
+        "command": "cmake --build ${workspaceFolder:legate-jax}/build",
+        "options": {
+          "cwd": "${workspaceFolder:legate-jax}",
+          "env": {},
+        },
+        "problemMatcher": {
+          "base": "$gcc",
+          "fileLocation": ["absolute"]
+        }
+      },
+      {
+        "label": "Run MPMD partition tests",
+        "type": "shell",
+        "group": "test",
+        "command": "ctest",
+        "options": {
+          "cwd": "${workspaceFolder:legate-jax}",
+          "env": {},
+        },
+        "args" : [
+          "-j",
+          "16",
+          "--test-dir",
+          "build",
+          "-R",
+          "MpmdPartitionTest.*",
+        ]
+      },
+      {
+        "label": "Run XLA executable smoke tests",
+        "type": "shell",
+        "group": "test",
+        "command": "ctest",
+        "options": {
+          "cwd": "${workspaceFolder:legate-jax}",
+          "env": {
+            "CUDA_VISIBLE_DEVICES" : "0"
+          },
+        },
+        "args" : [
+          "--test-dir",
+          "build",
+          "-R",
+          "LegateExecutableTest.TransformerTwoNodesHostOffload",
+        ]
+      },
+      {
+        "label": "Run XLA smoke tests",
+        "group": "test",
+        "dependsOn": ["Run XLA executable smoke tests", "Run MPMD partition tests"],
+      },
+      {
+        "label": "Run JAX microbatch single GPU tests",
+        "type": "shell",
+        "group": "test",
+        "command": "${command:python.interpreterPath}",
+        "options": {
+          "cwd": "${workspaceFolder:legate-jax}",
+        },
+        "args" : [
+          "tests/python/jax_microbatch_test.py",
+          "--gpus",
+          "1",
+        ]
+      },
+      {
+        "label": "Run JAX microbatch multi-CPU tests",
+        "type": "shell",
+        "group": "test",
+        "command": "${command:python.interpreterPath}",
+        "options": {
+          "cwd": "${workspaceFolder:legate-jax}",
+        },
+        "args" : [
+          "tests/python/jax_microbatch_test.py",
+          "--gpus",
+          "0",
+          "--cpus",
+          "4"
+        ]
+      },
+      {
+        "label": "Run JAX task multi-GPU tests",
+        "type": "shell",
+        "group": "test",
+        "command": "${command:python.interpreterPath}",
+        "options": {
+          "cwd": "${workspaceFolder:legate-jax}",
+        },
+        "args" : [
+          "tests/python/jax_task_test.py",
+          "--gpus",
+          "2",
+          "--cpus",
+          "2"
+        ]
+      },
+      {
+        "label": "Run JAX auto-task multi-GPU tests",
+        "type": "shell",
+        "group": "test",
+        "command": "${command:python.interpreterPath}",
+        "options": {
+          "cwd": "${workspaceFolder:legate-jax}",
+        },
+        "args" : [
+          "tests/python/jax_auto_task_test.py",
+          "--gpus",
+          "2",
+          "--cpus",
+          "2"
+        ]
+      },
+      {
+        "label": "Run JAX auto-task 4 CPU tests",
+        "type": "shell",
+        "group": "test",
+        "command": "${command:python.interpreterPath}",
+        "options": {
+          "cwd": "${workspaceFolder:legate-jax}",
+        },
+        "args" : [
+          "tests/python/jax_auto_task_test.py",
+          "--gpus",
+          "0",
+          "--cpus",
+          "4"
+        ]
+      },
+      {
+        "label": "Run JAX auto-task 8 CPU tests",
+        "type": "shell",
+        "group": "test",
+        "command": "${command:python.interpreterPath}",
+        "options": {
+          "cwd": "${workspaceFolder:legate-jax}",
+        },
+        "args" : [
+          "tests/python/jax_auto_task_test.py",
+          "--gpus",
+          "0",
+          "--cpus",
+          "8"
+        ]
+      },
+      {
+        "label": "Run JAX CPU tests",
+        "group": "test",
+        "dependsOn": [
+          "Run JAX microbatch multi-CPU tests",
+          "Run JAX auto-task 4 CPU tests",
+          "Run JAX auto-task 8 CPU tests",
+        ],
+      },
+      {
+        "label": "Run JAX GPU tests",
+        "group": "test",
+        "dependsOrder": "sequence",
+        "dependsOn": [
+          "Run JAX microbatch single GPU tests",
+          "Run JAX task multi-GPU tests",
+          "Run JAX auto-task multi-GPU tests",
+        ],
+      },
+      {
+        "label": "Run JAX tests",
+        "group": "test",
+        "dependsOn": [
+          "Run JAX GPU tests",
+          "Run JAX CPU tests",
+        ],
+      },
+    ],
+  },
+  "launch": {
+    "configurations": [
+      {
+        "name": "Python: Attach",
+        "type": "python",
+        "request": "attach",
+        "connect": {
+          "host": "localhost",
+          "port": 5678
+        }
+      },
+    ]
+  },
+  "settings": {
+    "editor.formatOnSave": false,
+  }
+}

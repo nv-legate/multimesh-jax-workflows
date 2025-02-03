@@ -1,0 +1,13 @@
+{
+	"name": "Ubuntu",
+	"image": "mcr.microsoft.com/devcontainers/base:jammy",
+  "extensions": [
+    "llvm-vs-code-extensions.vscode-clangd", 
+    "ms-vscode.cpptools",
+    "xaver.clang-format",
+    "njpwerner.autodocstring",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+    "eamodio.gitlens",
+  ]
+}

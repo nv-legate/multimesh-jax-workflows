@@ -142,5 +142,12 @@ COPY maxtext /opt/maxtext
 RUN cd /opt/maxtext && conda run -n legere python -m pip install -e . --no-deps --no-build-isolation --force-reinstall
 COPY maxtext-fixup-pip.sh /opt
 RUN /opt/maxtext-fixup-pip.sh
+
+COPY realm-jax.code-workspace /opt
+COPY git-config.sh /opt
+RUN ln -s /opt /docker
+RUN ln -s /usr/bin/clangd-17 /usr/bin/clangd
+RUN /opt/git-config.sh
+
 ENTRYPOINT [ "/opt/entrypoint.sh" ]
 CMD [ "/bin/bash" ]
