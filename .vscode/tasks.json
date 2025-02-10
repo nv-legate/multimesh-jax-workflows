@@ -4,32 +4,66 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "New Workspace in Folder",
+            "type": "shell",
+            "group": "build",
+            "command": "${workspaceFolder}/bin/new-workspace",
+            "options": {
+              "cwd": "${workspaceFolder}/workspaces",
+              "env": {}
+            },
+            "args" : [
+              "${input:workspace_folder}"
+            ]
+        },
+        {
             "label": "Start Dask Workers",
             "type": "shell",
             "command": "${command:python.interpreterPath}",
             "options": {
               "cwd": "${workspaceFolder}/docker",
-              "env": {},
+              "env": {}
             },
             "args" : [
                 "${workspaceFolder}/bin/start-dask.py",
                 "--remote",
-                "${input:remote}",
+                "${input:remote}"
+            ]
+        },
+        {
+            "label": "Start Devcontainer",
+            "type": "shell",
+            "group": "build",
+            "command": "./start-devcontainer.sh",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${input:dev_image}",
+                "${input:container_name}"
+            ]
+        },
+        {
+            "label": "Make Devcontainer Mount Folder",
+            "type": "shell",
+            "group": "build",
+            "command": "mkdir",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "-p",
+                "mount"
             ]
         },
         {
             "label": "Launch Devcontainer",
             "type": "shell",
             "group": "build",
-            "command": "./start-devcontainer.sh",
-            "options": {
-              "cwd": "${workspaceFolder}/docker",
-              "env": {},
-            },
-            "args" : [
-                "${input:dev_image}",
-                "${input:container_name}",
-            ]
+            "dependsOn" : ["Make Devcontainer Mount Folder", "Start Devcontainer"],
+            "dependsOrder": "sequence"
         },
         {
             "label": "Build and Upload Maxtext Snapshot",
@@ -38,7 +72,7 @@
             "command": "${command:python.interpreterPath}",
             "options": {
               "cwd": "${workspaceFolder}/docker",
-              "env": {},
+              "env": {}
             },
             "args" : [
                 "${workspaceFolder}/docker/build.py",
@@ -49,7 +83,7 @@
                 "maxtext",
                 "--save_remote",
                 "--remote",
-                "${input:remote}",
+                "${input:remote}"
             ]
         },
         {
@@ -59,14 +93,80 @@
             "command": "./build.py",
             "options": {
               "cwd": "${workspaceFolder}/docker",
-              "env": {},
+              "env": {}
             },
             "args" : [
                 "--commit",
                 "${input:container_name}",
                 "--tag",
                 "${input:container_name}",
+                "--upload"
+            ]
+        },
+        {
+            "label": "Commit and Test Devcontainer",
+            "type": "shell",
+            "group": "test",
+            "command": "${command:python.interpreterPath}",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${workspaceFolder}/docker/build.py",
+                "--commit",
+                "${input:container_name}",
+                "--tag",
+                "${input:container_name}",
                 "--upload",
+                "--validate",
+                "medium",
+                "--remote",
+                "${input:remote}"
+            ]
+        },
+        {
+            "label": "Commit and Test Devcontainer #2",
+            "type": "shell",
+            "group": "test",
+            "command": "${command:python.interpreterPath}",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${workspaceFolder}/docker/build.py",
+                "--commit",
+                "${input:container_name}",
+                "--tag",
+                "${input:container_name}",
+                "--upload",
+                "--validate",
+                "medium",
+                "--remote",
+                "${input:remote}"
+            ]
+        },
+        {
+            "label": "Commit and Test Devcontainer #3",
+            "type": "shell",
+            "group": "test",
+            "command": "${command:python.interpreterPath}",
+            "options": {
+              "cwd": "${workspaceFolder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "${workspaceFolder}/docker/build.py",
+                "--commit",
+                "${input:container_name}",
+                "--tag",
+                "${input:container_name}",
+                "--upload",
+                "--validate",
+                "medium",
+                "--remote",
+                "${input:remote}"
             ]
         },
         {
@@ -76,7 +176,7 @@
             "command": "${command:python.interpreterPath}",
             "options": {
               "cwd": "${workspaceFolder}/docker",
-              "env": {},
+              "env": {}
             },
             "args" : [
                 "${workspaceFolder}/docker/build.py",
@@ -85,7 +185,7 @@
                 "--tag",
                 "${input:container_name}",
                 "--remote",
-                "${input:remote}",
+                "${input:remote}"
             ]
         },
         {
@@ -95,7 +195,7 @@
             "command": "${command:python.interpreterPath}",
             "options": {
               "cwd": "${workspaceFolder}/docker",
-              "env": {},
+              "env": {}
             },
             "args" : [
                 "${workspaceFolder}/docker/build.py",
@@ -104,9 +204,9 @@
                 "--tag",
                 "${input:container_name}",
                 "--remote",
-                "${input:remote}",
+                "${input:remote}"
             ]
-        },
+        }
     ],
     "inputs": [
         {
@@ -121,10 +221,15 @@
             "type": "promptString"
         },
         {
+            "id": "workspace_folder",
+            "description": "The name of the folder where to open a new workspace",
+            "type": "promptString"
+        },
+        {
             "id": "remote",
             "description": "The remote server to run on",
             "default": "eos",
             "type": "promptString"
-        },
+        }
     ]
 }

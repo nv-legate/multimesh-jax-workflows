@@ -10,31 +10,13 @@
       "path": "zuku",
     },
     {
-      "path": "jax",
-    },
-    {
-      "path": "TransformerEngine",
-    },
-    {
-      "path": "legion"
-    },
-    {
-      "path": "paxml"
-    },
-    {
-      "path": "praxis"
-    },
-    {
-      "path": "flax"
-    },
-    {
-      "path": "maxtext"
+      "path": "realm"
     },
   ],
   "tasks": {
     "version": "2.0.0",
     "tasks": [
-      {
+       {
         "label": "Compile Legate-Jax",
         "type": "shell",
         "group": "build",
@@ -47,6 +29,22 @@
           "base": "$gcc",
           "fileLocation": ["absolute"]
         }
+      },
+      {
+        "label": "Install Legate-Jax",
+        "type": "shell",
+        "group": "build",
+        "command": "cmake --install build",
+        "options": {
+          "cwd": "${workspaceFolder:legate-jax}",
+          "env": {},
+        },
+      },
+      {
+        "label": "Build Legate-Jax",
+        "group": "build",
+        "dependsOrder": "sequence",
+        "dependsOn": ["Compile Legate-Jax", "Install Legate-Jax"],
       },
       {
         "label": "Run MPMD partition tests",

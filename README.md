@@ -19,7 +19,7 @@ starting a devcontainer, do the following:
 * Create a conda environment, e.g. `dev-workflows` from the provided environment file on your development machine
 
 ```bash
-legate-jax-workflows $ conda create -n dev-workflows -f environment.yml
+legate-jax-workflows $ conda env create -n dev-workflows -f environment.yml
 ```
 
 * Install all Python dependencies. It is recommend to use the `eos_workflows` dependency as an editable install
@@ -39,24 +39,26 @@ legate-jax-workflows $ python -m pip install -r requirements.txt
 
 Inside the project, the following steps are then required for each new development environment:
 
-### Start a new container running in detached mode
+### Clone a new copy of this monorepo repository with a descriptive name
 
-The easiest way is to use the pre-configured task `Launch Devcontainers' (shift+cmd+b on Mac)`.
+The easiest way is to use the pre-configured task `New Workspace In Folder' (shift+cmd+b on Mac)`.
 The user is then prompted to give the image name and a unique name for the container.
-The image defaults to `gitlab-master.nvidia.com:5005/legate/quickstart.internal/legate-jax-dev:maxtext-devel`.
-The vscode task wraps the `start-devcontainer.sh` script in the docker folder.
-The chosen container name should describe the feature you are going to develop.
-This step may take several minutes if the entire image needs to be downloaded.
+The chosen name should describe the feature you are going to develop.
+A code window should open with the fresh monorepo checkout.
 
-### Attach vscode to the container
+### Open devcontainer in new window
 
-Using the Docker extension, find your now running container and right-click
-to bring up the option `Attach Visual Studio Code`. This will open a new
-window, which may take a minute to install code-server and extensions.
-vscode does not automatically open workspaces so the user
-will have to manually open `/opt/realm-jax.code-workspace`.
-Once opened, the user will have a complete and hermetic devcontainer
-with a fully built XLA.
+A prompt should appear asking to reopen in container. Select this option.
+This will load vscode in a new devcontainer with all base dependencies installed.
+Startup scripts will then configure all builds and execute an initial build
+of the environment. The startup scripts point Bazel and CMake to build
+caches on your local system.
+
+* The initial base container download may take a long time on the first download
+* The startup scripts may take a few minutes to up to an hour depending on how
+  much of the build is available in the build cache.
+
+Once the workspace is open, it now contains a complete vscode development environment.
 
 ### Remote cache
 

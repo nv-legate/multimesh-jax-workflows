@@ -23,9 +23,12 @@ conda create -n legere
 echo "conda activate legere" >> /root/.bashrc
 
 conda run --no-capture-out -n legere \
-  conda install -c conda-forge -y cmake cython ninja openblas \
-    python==3.10.6 rust openssh gdb==14.2
+  conda install -c conda-forge -y \
+    python==3.10.6 \
+    cmake \
+    ccache
 
 conda run --no-capture-out -n legere \
-  python -m pip install build cffi gin-config numpy pyarrow \
-    pybind11 pybind11-global scikit-build tensorflow typing_extensions
+  python -m pip install build numpy \
+  pybind11 pybind11-global scikit-build \
+  tensorflow typing_extensions

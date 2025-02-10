@@ -3,7 +3,7 @@
 apt-get update
 
 apt-get install -y --no-install-recommends \
-  clang-15 gcc-12 g++-12 apt-transport-https autoconf automake curl \
+  gcc-12 g++-12 apt-transport-https autoconf automake curl \
   gdb git gnupg libnl-3-200 libnl-3-dev libnl-route-3-200 libnl-route-3-dev libtool numactl python3 \
   vim wget zlib1g-dev build-essential devscripts debhelper fakeroot
 

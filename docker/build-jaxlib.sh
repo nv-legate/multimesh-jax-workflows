@@ -1,8 +1,9 @@
 #! /usr/bin/env bash
 
-pushd /opt/jaxlib
+pushd /opt/workspace/jax
 
 BAZEL_CACHE=$1
+BUILD_DIR=$2
 
 export PYTHON_BIN_PATH=/opt/install/miniconda/envs/legere/bin/python
 export USE_DEFAULT_PYTHON_LIB_PATH=1
@@ -31,8 +32,10 @@ EOF
 
 conda run --no-capture-out -n legere python build/build.py \
   --bazel_startup_options=--batch \
-  --bazel_options=--override_repository=xla=/opt/xla \
+  --bazel_options=--override_repository=xla=/opt/workspace/xla \
   --bazel_options=--remote_cache=${BAZEL_CACHE} \
+  --bazel_startup_options=--output_base=/opt/build/jaxlib \
+  --output_path=/opt/build/jaxlib \
   --use_clang \
   --clang_path=/usr/lib/llvm-17/bin/clang \
   --build_gpu_plugin \
