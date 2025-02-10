@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+pushd /opt/workspace/xla
+
 export PYTHON_BIN_PATH=/opt/install/miniconda/envs/legere/bin/python
 export USE_DEFAULT_PYTHON_LIB_PATH=1
 export TF_NEED_ROCM=0
@@ -16,51 +18,22 @@ export GCC_HOST_COMPILER_PATH=/usr/bin/gcc
 export CC_OPT_FLAGS=--Wno-sign-compare
 export TF_SET_ANDROID_WORKSPACE=0
 
-# symlink cudnn into a private directory
-# to avoid include conflicts
-mkdir -p /opt/nvidia/cudnn
-pushd /opt/nvidia/cudnn
-mkdir lib
-pushd lib
-for file in /lib/x86_64-linux-gnu/*cudnn*.so; do
-  ln -s $file .
-done
-popd
-mkdir include
-pushd include
-for file in /usr/include/*cudnn*.h; do
-  ln -s $file .
-done
-popd
-popd
-
-# symlink nccl into a private directory
-# to avoid include conflicts
-mkdir -p /opt/nvidia/nccl
-pushd /opt/nvidia/nccl
-mkdir lib
-pushd lib
-for file in /lib/x86_64-linux-gnu/*nccl*.so; do
-  ln -s $file .
-done
-mkdir include
-pushd include
-for file in /usr/include/*nccl*.h; do
-  ln -s $file .
-done
-popd
-popd
-
 conda run --no-capture-out -n legere python configure.py \
   --backend CUDA \
   --host_compiler CLANG \
-  --clang_path `which clang-15` \
+  --clang_path `which clang-17` \
   --nccl \
+  --cuda_version $TF_CUDA_VERSION \
+  --cudnn_version $TF_CUDNN_VERSION \
   --local_cuda_path /usr/local/cuda \
   --local_cudnn_path /opt/nvidia/cudnn \
   --local_nccl_path /opt/nvidia/nccl \
-  --nccl_version=$TF_NCCL_VERSION \
   --cuda_compute_capabilities=sm_80,sm_90a
 
 python_version=$(/opt/install/miniconda/envs/legere/bin/python --version | awk '{print $2}' | cut -d . -f 1-2)
 echo "build --repo_env HERMETIC_PYTHON_VERSION=${python_version}" >> xla_configure.bazelrc
+
+popd
+
+# stash the configure for later
+cp /opt/workspace/xla/xla_configure.bazelrc /opt

@@ -11,7 +11,7 @@
 	url = https://github.com/google/CommonLoopUtils.git
 	shallow = true
 [submodule "docker/jax"]
-	path = docker/jax
+	path = docker/workspace/jax
 	url = ssh://git@github.com/nv-legate/jax.git
 	shallow = true
 [submodule "docker/optax"]
@@ -27,15 +27,15 @@
 	url = https://github.com/AI-Hypercomputer/maxtext.git
 	shallow = true
 [submodule "docker/zuku"]
-	path = docker/zuku
+	path = docker/workspace/zuku
 	url = ssh://git@gitlab-master.nvidia.com:12051/jwilke/realm-poc.git
   shallow = true
 [submodule "docker/legate-jax"]
-	path = docker/legate-jax
+	path = docker/workspace/legate-jax
 	url = ssh://git@github.com/nv-legate/legate.jax.git
   shallow = true
 [submodule "docker/realm"]
-	path = docker/realm
+	path = docker/workspace/realm
 	url = https://gitlab.com/StanfordLegion/legion.git
   shallow = true
 [submodule "docker/orbax"]
@@ -58,12 +58,8 @@
 	path = docker/te
 	url = https://github.com/NVIDIA/TransformerEngine.git
   shallow = true
-[submodule "docker/te-xla"]
-	path = docker/te-xla
-	url = https://github.com/openxla/xla.git
-  shallow = true
 [submodule "docker/xla"]
-	path = docker/xla
+	path = docker/workspace/xla
 	url = ssh://git@github.com/nv-legate/xla.git
   shallow = true
 [submodule "docker/ucx"]

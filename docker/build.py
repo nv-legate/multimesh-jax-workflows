@@ -89,7 +89,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--cache-port",
+    "--cache-addr",
     type=str,
     default="172.17.0.1",
     help="the port to use for the Bazel remote cache",
@@ -158,26 +158,36 @@ tag = args.tag or args.framework
 image_name = f"{short_image_name}:{tag}"
 
 if args.commit:
-    cmds = ["docker", "commit", args.commit, image_name]
+    # first commit a temp image
+    temp_image_name = f"{image_name}_temp"
+    cmds = ["docker", "commit", args.commit, temp_image_name]
+    run(cmds)
+
+    # add the necessary workspace folders into the image
+    cmds = ["docker", "build", "-t", image_name, "-f", "Dockerfile.commit", "--build-arg", f"COMMIT_IMAGE={temp_image_name}", "."]
+    run(cmds)
+
+    # remove the temp commit image
+    cmds = ["docker", "rmi", "-f", temp_image_name]
     run(cmds)
 elif args.build:
-    stage = args.stage or f"{args.framework}_install"
     cmds = [
         "docker",
         "build",
-        "--target",
-        stage,
         "-t",
         image_name,
         "-f",
         dockerfile,
         ".",
     ]
+    if args.stage:
+      cmds.append("--target")
+      cmds.append(args.stage)
     if args.cache:
         cmds = cmds + [
             "--network=host",
             "--add-host",
-            f"host.docker.internal:{args.cache_port}",
+            f"host.docker.internal:{args.cache_addr}",
         ]
 
     for arg, value in (
