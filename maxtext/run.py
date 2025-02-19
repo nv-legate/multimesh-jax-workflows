@@ -224,7 +224,7 @@ legate_jax.add_argument(
 legate_jax.add_argument(
     "--sequence-parallel",
     action=argparse.BooleanOptionalAction,
-    default=True,
+    default=False,
     help="Whether to use sequence parallelism",  # noqa: E501
 )
 legate_jax.add_argument(
@@ -525,7 +525,6 @@ if args.dump:
     xla_flags = xla_flags + [
         f"--xla_dump_to={args.dump}",
         "--xla_dump_hlo_as_text",
-        "--xla_dump_hlo_as_proto",
     ]
 if args.dump_all_passes:
     xla_flags = xla_flags + [
@@ -632,8 +631,16 @@ if args.backend == "legate":
         ("stage", "y"),
         ("fsdp", "y"),
         ("fsdp_transpose", "y"),
-        ("sequence", "z"),
-        ("tensor", "z"),
+    ]
+
+    if args.sequence_parallel:
+        transformer_axes.append(("sequence", "z"))
+        transformer_axes.append(("tensor", "z"))
+    else:
+        transformer_axes.append(("tensor", "z"))
+        transformer_axes.append(("sequence", "z"))
+
+    transformer_axes += [
         ("autoregressive", "z"),
         ("data", "z"),
     ]
@@ -741,6 +748,7 @@ argv = [
     str(config),
     "run_name=my_name",
     f"base_output_directory=${os.getcwd()}/logs",
+    "dataset_type=synthetic",
     "enable_single_controller=False",
     "enable_checkpointing=False",
     f"scan_layers={args.scan_layers}",
@@ -748,7 +756,6 @@ argv = [
 ]
 
 if args.model_name is None:
-    argv.append(f"dataset_type=synthetic")
     argv.append(f"use_iota_embed={args.use_iota_embed}")
     argv.append(f"logits_dot_in_fp32={args.logits_dot_in_fp32}")
 
@@ -785,14 +792,35 @@ num_local_devices = len(
 if args.gpus == 0 or num_local_devices == 0:
     num_local_devices = args.cpus
 total_nodes = total_devices // num_local_devices
-dcn_pp = total_nodes
-ici_pp = args.pp // total_nodes
 
-argv.append(f"ici_data_parallelism={args.dp}")
-argv.append(f"ici_tensor_parallelism={args.tp}")
+
+def split_ici_dcn(agg_parallelism, p):
+    if agg_parallelism >= num_local_devices:
+        return (1, p, agg_parallelism * p)
+
+    total_parallelism = p * agg_parallelism
+    if total_parallelism <= num_local_devices:
+        return (p, 1, agg_parallelism * p)
+
+    dcn = total_parallelism // num_local_devices
+    ici = p // dcn
+    return (ici, dcn, agg_parallelism * p)
+
+
+agg = 1  # aggregate parallelism
+ici_tp, dcn_tp, agg = split_ici_dcn(agg, args.tp)
+ici_pp, dcn_pp, agg = split_ici_dcn(agg, args.pp)
+ici_fsdp, dcn_fsdp, agg = split_ici_dcn(agg, args.fsdp)
+ici_dp, dcn_dp, agg = split_ici_dcn(agg, args.dp)
+
+argv.append(f"ici_data_parallelism={ici_dp}")
+argv.append(f"ici_fsdp_parallelism={ici_fsdp}")
 argv.append(f"ici_pipeline_parallelism={ici_pp}")
+argv.append(f"ici_tensor_parallelism={ici_tp}")
+argv.append(f"dcn_data_parallelism={dcn_dp}")
+argv.append(f"dcn_fsdp_parallelism={dcn_fsdp}")
 argv.append(f"dcn_pipeline_parallelism={dcn_pp}")
-argv.append(f"ici_fsdp_parallelism={args.fsdp}")
+argv.append(f"dcn_tensor_parallelism={dcn_tp}")
 
 # optional maxtext args/overrides
 if args.model_name:
@@ -830,7 +858,8 @@ with legate.jax.context(
 
     if args.hlo is None:
         import jaxlib
-        #sys.argv = argv
+
+        # sys.argv = argv
         try:
             train.main(argv)
         except jaxlib.xla_extension.XlaRuntimeError as e:
