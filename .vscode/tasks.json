@@ -13,7 +13,8 @@
               "env": {}
             },
             "args" : [
-              "${input:workspace_folder}"
+              "${input:workspace_folder}",
+              "${workspaceFolder}"
             ]
         },
         {
