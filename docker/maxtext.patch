@@ -476,7 +476,7 @@ index 2ff2926e..883809a8 100644
        num_stages = int(raw_keys["ici_pipeline_parallelism"] * raw_keys["dcn_pipeline_parallelism"])
        if raw_keys["num_pipeline_repeats"] == -1:
 diff --git a/MaxText/train.py b/MaxText/train.py
-index 182dd75e..a24f9ad2 100644
+index 182dd75e..188b6349 100644
 --- a/MaxText/train.py
 +++ b/MaxText/train.py
 @@ -26,7 +26,7 @@ import sys
@@ -496,15 +496,7 @@ index 182dd75e..a24f9ad2 100644
  from layers import models
  
  import jax.numpy as jnp
-@@ -63,6 +64,7 @@ from layers import quantizations
- 
- from ml_goodput_measurement import goodput
- from ml_goodput_measurement import monitoring
-+from praxis import trees
- 
- # pylint: disable=too-many-positional-arguments
- 
-@@ -168,14 +170,14 @@ def write_metrics_to_tensorboard(writer, metrics, step, config, is_training=True
+@@ -168,14 +169,14 @@ def write_metrics_to_tensorboard(writer, metrics, step, config, is_training=True
            f"completed step: {step}, seconds: {metrics['scalar']['perf/step_time_seconds']:.3f}, "
            f"TFLOP/s/device: {metrics['scalar']['perf/per_device_tflops_per_sec']:.3f}, "
            f"Tokens/s/device: {metrics['scalar']['perf/per_device_tokens_per_sec']:.3f}, "
@@ -523,7 +515,7 @@ index 182dd75e..a24f9ad2 100644
  
  def clear_buffered_metrics():
    global _buffered_step
-@@ -299,9 +301,12 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
+@@ -299,9 +300,12 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
    xent = nn.with_logical_constraint(xent, ("activation_embed_and_logits_batch", "activation_length"))
    # Mask out paddings at the end of each example.
    xent = xent * (data["targets_segmentation"] != 0)
@@ -539,7 +531,7 @@ index 182dd75e..a24f9ad2 100644
    # get moe load balance loss
    moe_lb_loss = 0.0
    if config.num_experts > 1:
-@@ -318,6 +323,22 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
+@@ -318,6 +322,22 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
    return loss, aux
  
  
@@ -562,7 +554,7 @@ index 182dd75e..a24f9ad2 100644
  def train_step(model, config, state, data, dropout_rng):
    """
  
-@@ -367,7 +388,28 @@ def train_step(model, config, state, data, dropout_rng):
+@@ -367,7 +387,28 @@ def train_step(model, config, state, data, dropout_rng):
      aux = jax.tree_map(lambda x: jnp.sum(x, axis=0), aux)
    else:
      grad_func = jax.value_and_grad(loss_fn, argnums=4, has_aux=True)
@@ -592,7 +584,7 @@ index 182dd75e..a24f9ad2 100644
    intermediate_outputs = aux["intermediate_outputs"]
    total_weights = aux["total_weights"]
    moe_lb_loss = aux["moe_lb_loss"]
-@@ -380,11 +422,11 @@ def train_step(model, config, state, data, dropout_rng):
+@@ -380,11 +421,11 @@ def train_step(model, config, state, data, dropout_rng):
    metrics = {
        "scalar": {
            "learning/loss": loss,
@@ -609,7 +601,7 @@ index 182dd75e..a24f9ad2 100644
        },
        "scalars": {},
    }
-@@ -530,15 +572,29 @@ def setup_train_loop(config):
+@@ -530,15 +571,29 @@ def setup_train_loop(config):
    record_goodput(recorder, config, recorder.record_training_preparation_start_time if recorder else None)
    data_iterator, eval_data_iterator = create_data_iterator(config, mesh)
  
@@ -646,7 +638,7 @@ index 182dd75e..a24f9ad2 100644
        init_rng,
        writer,
        checkpoint_manager,
-@@ -548,7 +604,7 @@ def setup_train_loop(config):
+@@ -548,7 +603,7 @@ def setup_train_loop(config):
        learning_rate_schedule,
        data_iterator,
        eval_data_iterator,
@@ -655,7 +647,7 @@ index 182dd75e..a24f9ad2 100644
    )
  
  
-@@ -565,6 +621,7 @@ def train_loop(config, state=None):
+@@ -565,6 +620,7 @@ def train_loop(config, state=None):
    record_goodput(recorder, config, recorder.record_job_start_time if recorder else None)
  
    (
@@ -663,7 +655,7 @@ index 182dd75e..a24f9ad2 100644
        init_rng,
        writer,
        checkpoint_manager,
-@@ -574,8 +631,9 @@ def train_loop(config, state=None):
+@@ -574,8 +630,9 @@ def train_loop(config, state=None):
        learning_rate_schedule,
        data_iterator,
        eval_data_iterator,
@@ -674,7 +666,7 @@ index 182dd75e..a24f9ad2 100644
    # pylint: disable=line-too-long
    (
        functional_train,
-@@ -583,7 +641,7 @@ def train_loop(config, state=None):
+@@ -583,7 +640,7 @@ def train_loop(config, state=None):
        out_shard_train,
        static_argnums_train,
        donate_argnums_train,
@@ -683,7 +675,7 @@ index 182dd75e..a24f9ad2 100644
  
    if eval_data_iterator:
      # pylint: disable=line-too-long
-@@ -595,6 +653,9 @@ def train_loop(config, state=None):
+@@ -595,6 +652,9 @@ def train_loop(config, state=None):
          donate_argnums_eval,
      ) = maxtext_utils.get_functional_eval_with_signature(eval_step, mesh, state_mesh_annotations, model, config)
  
@@ -693,7 +685,7 @@ index 182dd75e..a24f9ad2 100644
    num_model_parameters = max_utils.calculate_num_params_from_pytree(state.params)
    max_logging.log(f"number parameters: {num_model_parameters/1e9:.3f} billion")
    per_device_tflops, _, _ = maxtext_utils.calculate_tflops_training_per_device(config)
-@@ -614,15 +675,9 @@ def train_loop(config, state=None):
+@@ -614,15 +674,9 @@ def train_loop(config, state=None):
      p_eval_step = None
      print("Loaded compiled function!", flush=True)
    else:
@@ -711,7 +703,7 @@ index 182dd75e..a24f9ad2 100644
        p_eval_step = jax.jit(
            functional_eval,
            in_shardings=in_shard_eval,
-@@ -675,7 +730,8 @@ def train_loop(config, state=None):
+@@ -675,7 +729,8 @@ def train_loop(config, state=None):
          checkpoint_manager.wait_until_finished()
          sys.exit()
  
@@ -721,7 +713,7 @@ index 182dd75e..a24f9ad2 100644
  
      if config.eval_interval > 0 and step > start_step and (step + 1) % config.eval_interval == 0:
        assert eval_data_iterator
-@@ -721,7 +777,8 @@ def train_loop(config, state=None):
+@@ -721,7 +776,8 @@ def train_loop(config, state=None):
  
    if checkpoint_manager is not None:
      checkpoint_manager.wait_until_finished()
@@ -731,7 +723,7 @@ index 182dd75e..a24f9ad2 100644
    max_utils.close_summary_writer(writer)
    record_goodput(recorder, config, recorder.record_job_end_time if recorder else None)
    clear_buffered_metrics()
-@@ -736,6 +793,7 @@ def main(argv: Sequence[str]) -> None:
+@@ -736,6 +792,7 @@ def main(argv: Sequence[str]) -> None:
    pyconfig.initialize(argv)
    max_utils.print_system_information()
    config = pyconfig.config
