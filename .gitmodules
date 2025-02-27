@@ -28,7 +28,7 @@
 	shallow = true
 [submodule "docker/zuku"]
 	path = docker/workspace/zuku
-	url = ssh://git@gitlab-master.nvidia.com:12051/jwilke/realm-poc.git
+	url = git@github.com:nv-legate/zuku.git
   shallow = true
 [submodule "docker/legate-jax"]
 	path = docker/workspace/legate-jax
