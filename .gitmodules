@@ -28,7 +28,7 @@
 	shallow = true
 [submodule "docker/zuku"]
 	path = docker/workspace/zuku
-	url = git@github.com:nv-legate/zuku.git
+	url = ssh://git@github.com:nv-legate/zuku.git
   shallow = true
 [submodule "docker/legate-jax"]
 	path = docker/workspace/legate-jax
