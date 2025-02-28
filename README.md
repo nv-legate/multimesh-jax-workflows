@@ -106,18 +106,16 @@ The main tasks outside the container are build and test tasks:
 
 Documentation on the Jax APIs can be found [here](http://sw-mobile-docs/cllr/legate-jax/).
 
-## Driver scripts for running PaxML/MaxText
+## Driver script for MaxText
 
-Scripts for running [PaxML](paxml/run.py) and [MaxText](maxtext/run.py) are included to simplify the process
+A script for running [MaxText](maxtext/run.py) is included to simplify the process
 of tuning parameters. A full list of options can be required by running:
 
 ```
-legate-jax-workflows $ paxml/run.py --help
 legate-jax-workflows $ maxtext/run.py --help
 ```
 
-Most of the options for configuring Legate-Jax and the different parallelism
-will be the same:
+There are several options for configuring the parallelism:
 
 * `--dp <N>`: The degree of data parallelism
 * `--tp <N>`: The degree of tensor parallelism
@@ -138,10 +136,7 @@ For configuring pipeline parallelism, the most important parameters are:
  * `--microbatch-size <N>`: The microbatch size per tensor-parallel domain. Each domain will compute on a batch of shape `(Microbatch Size, Sequence Length)`.
     For a batch size of 1024, data-parallelism 8, and microbatch size 4 there will be a total of 32 microbatches.
 
-PaxML and MaxText will each have unique parameters for selecting models and configuring
-features of the model, such as checkpoint/recomputation strategy.
-
-## Running smoke tests locally for PaxML and MaxText
+## Running smoke tests locally for MaxText
 
 To run an example job in the container locally, example scripts are included in the repo.
 
@@ -182,47 +177,9 @@ docker run \
   ./validate-cpu.sh
 ```
 
-### PaxML with 2 GPUs
-
-A [script](paxml/validate-gpu.sh) for running a small job with TP=2 is included.
-PaxML is currently most stable with GPU/process:
-
-```
-docker run \
-  --cap-add SYS_ADMIN \
-  --entrypoint /opt/entrypoint.sh \
-  --net=host \
-  --add-host=host.docker.internal:host-gateway \
-  --mount type=bind,source="$(pwd)"/paxml,target=/workspace \
-  --gpus 2 \
-  -w /workspace \
-  gitlab-master.nvidia.com:5005/legate/quickstart.internal/legate-jax-dev:paxml \
-  mpirun -n 2 --allow-run-as-root validate-gpu.sh
-```
-
-### PaxML with 8 CPUs
-
-A [script](paxml/validate-cpu.sh) for running a small job with PP=2, TP=4 is included.
-Currently the container requires CUDA present even if running a
-CPU-only job. To launch the job:
-
-```
-docker run \
-  --cap-add SYS_ADMIN \
-  --entrypoint /opt/entrypoint.sh \
-  --net=host \
-  --add-host=host.docker.internal:host-gateway \
-  --mount type=bind,source="$(pwd)"/paxml,target=/workspace \
-  --gpus 2 \
-  -w /workspace \
-  gitlab-master.nvidia.com:5005/legate/quickstart.internal/legate-jax-dev:paxml \
-  ./validate-cpu.sh
-```
-
 ## Large runs on a DGX
 
 Scripts and config files are included for running larger jobs
 with hwloc bindings for a DGX H100.
 
-* [PaxML GPT3-175B for 64 GPUs](paxml/gpt3-175b-64gpus)
 * [MaxText GPT3-175B for 64 GPUs](maxtext/gpt3-175b-64gpus)
