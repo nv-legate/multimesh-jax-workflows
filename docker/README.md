@@ -1,7 +1,6 @@
 # Docker Image Instructions
 
-The Dockerfile and scripts in this folder create a working image of either
-the [PaxML](https://github.com/google/paxml) or [MaxText]() stack.
+The Dockerfile and scripts in this folder create a working image of [MaxText](https://github.com/AI-Hypercomputer/maxtext).
 There are a few basic steps to create a working image:
 
 ## Download and patch all relevant repos
@@ -42,10 +41,10 @@ There is a `./build.py` script that starts a docker build with the correct
 arguments for mapping the remote cache on the host network into the container.
 
 ```
-legate-jax-workflows/docker $ ./build.py --framework paxml
+legate-jax-workflows/docker $ ./build.py --framework maxtext
 ```
 
-This will produce an image named `legate-jax-dev:paxml` that can be tagged and pushed where needed.
+This will produce an image named `legate-jax-dev:maxtext` that can be tagged and pushed where needed.
 The image will contain all the code from the repos and installs Python libraries in 
 editable mode and enables rebuilds of the C++ libraries. To build without the remote cache,
 use the `--no-cache` option to the build. For a full list of options see `./build.py --help`.

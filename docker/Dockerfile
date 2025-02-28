@@ -1,6 +1,6 @@
 ARG CUDA_VERSION
 ARG CUDNN_VERSION
-ARG FRAMEWORK="paxml"
+ARG FRAMEWORK="maxtext"
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-devel-ubuntu22.04 AS base
 
 SHELL [ "/bin/bash", "-eo", "pipefail", "-c" ]
@@ -78,9 +78,6 @@ COPY praxis /opt/praxis
 
 FROM copy_common_frameworks AS copy_requirements_maxtext
 COPY maxtext-requirements.txt /opt/requirements.txt
-
-FROM copy_common_frameworks AS copy_requirements_paxml
-COPY paxml-requirements.txt /opt/requirements.txt
 
 FROM copy_requirements_${FRAMEWORK} AS install_python_libs
 COPY install-pip-dependencies.sh /opt
