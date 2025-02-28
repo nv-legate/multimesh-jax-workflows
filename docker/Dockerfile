@@ -176,7 +176,8 @@ RUN --mount=type=cache,from=build_custom_jaxlib,source=${BUILD_BASE_DIR}/jaxlib,
 
 FROM install_custom_jaxlib AS reinstall_custom_jax
 RUN conda run -n legere python -m pip uninstall -y jax
-RUN cd /opt/workspace/jax && \
+RUN --mount=type=cache,from=build_custom_jaxlib,source=/opt/workspace/jax,target=/opt/workspace/jax \
+  cd /opt/workspace/jax && \
   conda run --no-capture-out -n legere python -m pip install . --force-reinstall --no-deps
 
 COPY entrypoint.sh /opt/entrypoint.sh
