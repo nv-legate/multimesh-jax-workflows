@@ -7,16 +7,26 @@ import subprocess as sp
 from pathlib import Path
 
 import yaml
-from eos_workflows import save_maxtext_image, validate_maxtext_image, echo_test, get_worker_addr, get_remote_config, get_config
 from subprocess_tee import run
 
+try:
+    from eos_workflows import (
+        echo_test,
+        get_config,
+        get_remote_config,
+        get_worker_addr,
+        save_maxtext_image,
+        validate_maxtext_image,
+    )
+
+    user_config = get_config()
+    repo_config_path = Path(__file__).parent.parent / "config.yml"
+    with open(repo_config_path) as f:
+        repo_config = yaml.safe_load(f)
+except ImportError:
+    pass
+
 parser = argparse.ArgumentParser(allow_abbrev=False)
-
-user_config = get_config()
-
-repo_config_path = Path(__file__).parent.parent / "config.yml"
-with open(repo_config_path) as f:
-    repo_config = yaml.safe_load(f)
 
 parser.add_argument(
     "--image",
@@ -164,7 +174,17 @@ if args.commit:
     run(cmds)
 
     # add the necessary workspace folders into the image
-    cmds = ["docker", "build", "-t", image_name, "-f", "Dockerfile.commit", "--build-arg", f"COMMIT_IMAGE={temp_image_name}", "."]
+    cmds = [
+        "docker",
+        "build",
+        "-t",
+        image_name,
+        "-f",
+        "Dockerfile.commit",
+        "--build-arg",
+        f"COMMIT_IMAGE={temp_image_name}",
+        ".",
+    ]
     run(cmds)
 
     # remove the temp commit image
@@ -181,8 +201,8 @@ elif args.build:
         ".",
     ]
     if args.stage:
-      cmds.append("--target")
-      cmds.append(args.stage)
+        cmds.append("--target")
+        cmds.append(args.stage)
     if args.cache:
         cmds = cmds + [
             "--network=host",
@@ -228,7 +248,9 @@ if args.validate:
     job_folder = remote_config.get("job_folder")
     image_folder = remote_config.get("image_folder")
     if job_folder is None or image_folder is None:
-        raise Exception(f"must specify both a job_folder and base_folder for remote {args.remote} in config.yaml")
+        raise Exception(
+            f"must specify both a job_folder and base_folder for remote {args.remote} in config.yaml"
+        )
     data = json.loads(
         sp.check_output(
             ["docker", "image", "ls", image_name, "--format", "json"]
@@ -245,6 +267,13 @@ if args.validate:
     job_config = maxtext_config["validate"][args.validate]
 
     result = validate_maxtext_image.remote(
-        worker_addr, email=email, ID=image_id, tag=tag, dry_run=args.dry_run, skip_save=args.skip_save, job_folder=job_folder,
-        image_folder=image_folder, **job_config
+        worker_addr,
+        email=email,
+        ID=image_id,
+        tag=tag,
+        dry_run=args.dry_run,
+        skip_save=args.skip_save,
+        job_folder=job_folder,
+        image_folder=image_folder,
+        **job_config,
     )
