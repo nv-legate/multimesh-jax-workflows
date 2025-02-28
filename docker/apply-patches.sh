@@ -8,7 +8,5 @@ function patch {
   popd
 }
 
-patch paxml   paxml.patch
-patch praxis  praxis.patch
 patch te      te.patch
 patch maxtext maxtext.patch

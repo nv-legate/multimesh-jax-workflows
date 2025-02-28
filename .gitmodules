@@ -42,14 +42,6 @@
 	path = docker/orbax
 	url = https://github.com/google/orbax.git
   shallow = true
-[submodule "docker/paxml"]
-	path = docker/paxml
-	url = https://github.com/google/paxml.git
-  shallow = true
-[submodule "docker/praxis"]
-	path = docker/praxis
-	url = https://github.com/google/praxis.git
-  shallow = true
 [submodule "docker/seqio"]
 	path = docker/seqio
 	url = https://github.com/google/seqio.git

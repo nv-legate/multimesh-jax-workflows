@@ -43,7 +43,7 @@ parser.add_argument(
 parser.add_argument(
     "--framework",
     type=str,
-    choices=["paxml", "maxtext"],
+    choices=["maxtext"],
     default="maxtext",
 )
 
@@ -73,6 +73,13 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     default=True,
     help="Run a full docker build",
+)
+
+parser.add_argument(
+    "--no-docker-build-cache",
+    action="store_true",
+    default=False,
+    help="Do not use cache for docker build (clean build)",
 )
 
 parser.add_argument(
@@ -200,6 +207,8 @@ elif args.build:
         dockerfile,
         ".",
     ]
+    if args.no_docker_build_cache:
+        cmds.append("--no-cache")
     if args.stage:
         cmds.append("--target")
         cmds.append(args.stage)

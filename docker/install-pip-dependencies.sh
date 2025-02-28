@@ -27,11 +27,3 @@ popd
 pushd /opt/orbax
 conda run -n legere python -m pip install $editable_flag checkpoint --no-deps --no-build-isolation --force-reinstall
 popd
-
-# praxis and paxml must always be installed editable since the
-# contrib subfolders are not properly configured for installation
-
-pushd /opt/praxis
-conda run -n legere python -m pip install -e . --no-deps --no-build-isolation --force-reinstall
-popd
-

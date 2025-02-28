@@ -1,7 +1,4 @@
 docker/target/*
 docker/cache/*
-paxml/logs/*
-paxml/target/*
-paxml/dump/*
 maxtext/dump/*
 maxtext/target/*

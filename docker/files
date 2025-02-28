@@ -26,10 +26,6 @@ legate.patch
 legere
 maxtext-fixup-pip.sh
 maxtext-requirements.txt
-paxml-fixup-pip.sh
-paxml-requirements.txt
-paxml.patch
-praxis.patch
 start-cache.sh
 tags.sh
 te.patch

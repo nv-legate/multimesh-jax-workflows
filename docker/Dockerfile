@@ -74,7 +74,6 @@ COPY clu /opt/clu
 COPY optax opt/optax
 COPY seqio /opt/seqio
 COPY orbax /opt/orbax
-COPY praxis /opt/praxis
 
 FROM copy_common_frameworks AS copy_requirements_maxtext
 COPY maxtext-requirements.txt /opt/requirements.txt
