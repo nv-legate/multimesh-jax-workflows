@@ -41,27 +41,27 @@ jobs:
 
       - name: Generate a development docker image
         run: |
-          # export PATH=$PATH:/opt/miniconda3/bin
-          # export CONDA_ENV=ljw
+          export PATH=$PATH:/opt/miniconda3/bin
+          export CONDA_ENV=ljw
 
-          # activate_conda_env() {
-          #     set +xu
-          #     eval "$(conda shell.bash hook)"
-          #     conda activate "${CONDA_ENV}";
-          #     set -xu
-          # }
+          activate_conda_env() {
+              set +xu
+              eval "$(conda shell.bash hook)"
+              conda activate "${CONDA_ENV}";
+              set -xu
+          }
 
-          # conda create -n ${CONDA_ENV} -c conda-forge python=3.12 pyyaml subprocess-tee
+          conda create -n ${CONDA_ENV} -c conda-forge python=3.12 pyyaml subprocess-tee
 
-          # activate_conda_env
+          activate_conda_env
 
-          # cd docker
-          # ./build.py --framework maxtext
+          cd docker
+          ./build.py --framework maxtext
 
-          docker build -t legate-jax-dev:maxtext - <<EOF
-          FROM busybox
-          C_M_D echo "Hello from Busybox"
-          EOF
+          # docker build -t legate-jax-dev:maxtext - <<EOF
+          # FROM busybox
+          # C_M_D echo "Hello from Busybox"
+          # EOF
 
       - name: Save Docker image to file
         run: |
