@@ -34,10 +34,10 @@ jobs:
         run: |
           ./bootstrap.sh
 
-      - name: Start Bazel cache
-        run: |
-          cd docker
-          ./start-cache.sh
+      # - name: Start Bazel cache
+      #   run: |
+      #     cd docker
+      #     ./start-cache.sh
 
       - name: Generate a development docker image
         run: |
@@ -56,7 +56,7 @@ jobs:
           activate_conda_env
 
           cd docker
-          ./build.py --framework maxtext
+          ./build.py --no-cache --framework maxtext
 
           # docker build -t legate-jax-dev:maxtext - <<EOF
           # FROM busybox
