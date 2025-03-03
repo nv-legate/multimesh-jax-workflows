@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 
+import sys
 import argparse
 import json
 import os
@@ -8,6 +9,7 @@ from pathlib import Path
 
 import yaml
 from subprocess_tee import run
+from subprocess import CompletedProcess
 
 try:
     from eos_workflows import (
@@ -173,66 +175,69 @@ else:
 tag = args.tag or args.stage or args.framework
 image_name = f"{short_image_name}:{tag}"
 
-if args.commit:
-    # first commit a temp image
-    temp_image_name = f"{image_name}_temp"
-    cmds = ["docker", "commit", args.commit, temp_image_name]
-    run(cmds)
+try:
+    if args.commit:
+        # first commit a temp image
+        temp_image_name = f"{image_name}_temp"
+        cmds = ["docker", "commit", args.commit, temp_image_name]
+        run(cmds, check=True)
 
-    # add the necessary workspace folders into the image
-    cmds = [
-        "docker",
-        "build",
-        "-t",
-        image_name,
-        "-f",
-        "Dockerfile.commit",
-        "--build-arg",
-        f"COMMIT_IMAGE={temp_image_name}",
-        ".",
-    ]
-    run(cmds)
-
-    # remove the temp commit image
-    cmds = ["docker", "rmi", "-f", temp_image_name]
-    run(cmds)
-elif args.build:
-    cmds = [
-        "docker",
-        "build",
-        "-t",
-        image_name,
-        "-f",
-        dockerfile,
-        ".",
-    ]
-    if args.no_docker_build_cache:
-        cmds.append("--no-cache")
-    if args.stage:
-        cmds.append("--target")
-        cmds.append(args.stage)
-    if args.cache:
-        cmds = cmds + [
-            "--network=host",
-            "--add-host",
-            f"host.docker.internal:{args.cache_addr}",
+        # add the necessary workspace folders into the image
+        cmds = [
+            "docker",
+            "build",
+            "-t",
+            image_name,
+            "-f",
+            "Dockerfile.commit",
+            "--build-arg",
+            f"COMMIT_IMAGE={temp_image_name}",
+            ".",
         ]
     else:
         cmds.append("--build-arg")
         cmds.append("BAZEL_CACHE=")
 
-    for arg, value in (
-        ("LEGATE_BUILD_TYPE", args.build_type),
-        ("CUDA_VERSION", args.cuda_version),
-        ("CUDNN_VERSION", args.cudnn_version),
-        ("FRAMEWORK", args.framework),
-    ):
-        cmds.append("--build-arg")
-        cmds.append(f"{arg}={value}")
+        # remove the temp commit image
+        cmds = ["docker", "rmi", "-f", temp_image_name]
+        run(cmds, check=True)
+    elif args.build:
+        cmds = [
+            "docker",
+            "build",
+            "-t",
+            image_name,
+            "-f",
+            dockerfile,
+            ".",
+        ]
+        if args.no_docker_build_cache:
+            cmds.append("--no-cache")
+        if args.stage:
+            cmds.append("--target")
+            cmds.append(args.stage)
+        if args.cache:
+            cmds = cmds + [
+                "--network=host",
+                "--add-host",
+                f"host.docker.internal:{args.cache_addr}",
+            ]
 
-    print(" ".join(cmds))
+        for arg, value in (
+            ("LEGATE_BUILD_TYPE", args.build_type),
+            ("CUDA_VERSION", args.cuda_version),
+            ("CUDNN_VERSION", args.cudnn_version),
+            ("FRAMEWORK", args.framework),
+        ):
+            cmds.append("--build-arg")
+            cmds.append(f"{arg}={value}")
 
-    output = run(cmds)
+        print(" ".join(cmds))
+
+        output = run(cmds, check=True)
+except CompletedProcess as cp:
+    if cp.returncode != 0:
+        sys.exit(cp.returncode)
 
 remote_image = f"{args.repo}/{image_name}"
 if args.upload:
