@@ -11,7 +11,6 @@ from subprocess_tee import run
 
 try:
     from eos_workflows import (
-        echo_test,
         get_config,
         get_remote_config,
         get_worker_addr,
@@ -218,6 +217,8 @@ elif args.build:
             "--add-host",
             f"host.docker.internal:{args.cache_addr}",
         ]
+        cmds.append("--build-arg")
+        cmds.append("BAZEL_CACHE=")
 
     for arg, value in (
         ("LEGATE_BUILD_TYPE", args.build_type),
@@ -258,7 +259,8 @@ if args.validate:
     image_folder = remote_config.get("image_folder")
     if job_folder is None or image_folder is None:
         raise Exception(
-            f"must specify both a job_folder and base_folder for remote {args.remote} in config.yaml"
+            "must specify both a job_folder and base_folder "
+            f"for remote {args.remote} in config.yaml"
         )
     data = json.loads(
         sp.check_output(

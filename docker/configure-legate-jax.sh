@@ -7,7 +7,7 @@ BUILD_DIR=$2
 REALM_DIR=$3
 ZUKU_DIR=$4
 LIB_DIR=$5
-BAZEL_CACHE=grpc://host.docker.internal:9092
+BAZEL_CACHE=$6
 export CCACHE_DIR=/jax-plugin-ccache
 
 mkdir -p /opt/lib/legate-jax

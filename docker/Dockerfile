@@ -143,8 +143,9 @@ RUN /opt/configure-xla.sh
 FROM editable_install_zuku AS setup_jax_plugin
 COPY workspace/legate-jax /opt/workspace/legate-jax
 COPY workspace/xla /opt/workspace/xla
+ARG BAZEL_CACHE=grpc://host.docker.internal:9092
 RUN /opt/configure-xla.sh \
-    && /opt/configure-legate-jax.sh ${LEGATE_BUILD_TYPE} ${BUILD_BASE_DIR}/legate-jax ${BUILD_BASE_DIR}/realm ${BUILD_BASE_DIR}/zuku ${LIB_DIR}
+    && /opt/configure-legate-jax.sh ${LEGATE_BUILD_TYPE} ${BUILD_BASE_DIR}/legate-jax ${BUILD_BASE_DIR}/realm ${BUILD_BASE_DIR}/zuku ${LIB_DIR} ${BAZEL_CACHE}
 
 FROM setup_jax_plugin AS build_jax_plugin
 RUN --mount=type=cache,target=/ccache/legate-jax \
@@ -162,8 +163,7 @@ RUN --mount=type=cache,from=build_jax_plugin,source=${BUILD_BASE_DIR}/legate-jax
 FROM editable_install_jax_plugin AS build_custom_jaxlib
 COPY workspace/xla /opt/workspace/xla
 COPY workspace/jax /opt/workspace/jax
-ARG BAZEL_CACHE=grpc://host.docker.internal:9092
-RUN /opt/build-jaxlib.sh ${BAZEL_CACHE} ${BUILD_BASE_DIR}/jaxlib
+RUN /opt/build-jaxlib.sh ${BUILD_BASE_DIR}/jaxlib ${BAZEL_CACHE}
 
 FROM editable_install_jax_plugin AS install_custom_jaxlib
 RUN conda run -n legere python -m pip uninstall -y jaxlib

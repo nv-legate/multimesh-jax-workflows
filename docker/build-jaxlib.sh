@@ -2,8 +2,8 @@
 
 pushd /opt/workspace/jax
 
-BAZEL_CACHE=$1
-BUILD_DIR=$2
+BUILD_DIR=$1
+BAZEL_CACHE=$2
 
 export PYTHON_BIN_PATH=/opt/install/miniconda/envs/legere/bin/python
 export USE_DEFAULT_PYTHON_LIB_PATH=1
@@ -30,10 +30,16 @@ build:cuda --repo_env=LOCAL_CUDNN_PATH="/opt/nvidia/cudnn"
 build:cuda --repo_env=LOCAL_NCCL_PATH="/opt/nvidia/nccl"
 EOF
 
+if [ -z "$BAZEL_CACHE" ]; then
+    remote_cache_option=""
+else
+    remote_cache_option="--bazel_options=--remote_cache=${BAZEL_CACHE}"
+fi
+
 conda run --no-capture-out -n legere python build/build.py \
   --bazel_startup_options=--batch \
   --bazel_options=--override_repository=xla=/opt/workspace/xla \
-  --bazel_options=--remote_cache=${BAZEL_CACHE} \
+  $remote_cache_option \
   --bazel_startup_options=--output_base=/opt/build/jaxlib \
   --output_path=/opt/build/jaxlib \
   --use_clang \
