@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 from subprocess_tee import run
-from subprocess import CompletedProcess
+from subprocess import CalledProcessError
 
 try:
     from eos_workflows import (
@@ -235,7 +235,7 @@ try:
         print(" ".join(cmds))
 
         output = run(cmds, check=True)
-except CompletedProcess as cp:
+except CalledProcessError as cp:
     if cp.returncode != 0:
         sys.exit(cp.returncode)
 
