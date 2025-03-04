@@ -50,7 +50,7 @@ jobs:
         run: |
           cat ${VERSIONS_JSON_FILE}
 
-      - name: Get submodule SHAs from versions.json
+      - name: Get submodule SHAs from versions.json and update the submodules
         run: |
           cd ${LEGATE_JAX_WORKFLOWS_DIR}
 
@@ -65,7 +65,24 @@ jobs:
             | map({ key: .value.path, value: $obj2.packages[.key].git_tag })
             | from_entries
           ' - ${VERSIONS_JSON_FILE} | jq -r 'to_entries | .[] | "\(.key) \(.value)"' -)
+
           echo "SUBMODULE_SHAS=${SUBMODULE_SHAS}" >> $GITHUB_ENV
+
+          # Read each line, splitting into path and commit
+          while read -r repo_path commit_sha; do
+            echo "Entering $repo_path and checking out $commit_sha..."
+            # Go into the repo directory
+            cd "$repo_path" || exit 1
+
+            # Fetch all branches/tags
+            git fetch --all
+
+            # Check out the specified commit
+            git checkout "$commit_sha"
+
+            # Return to the previous directory
+            cd - > /dev/null
+          done <<< "${SUBMODULE_SHAS}"
 
 
       - name: Checkout submodules to SHAs specified in versions.json
