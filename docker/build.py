@@ -170,7 +170,7 @@ else:
     dockerfile = "Dockerfile.multi-stage"
     short_image_name = "legate-jax"
 
-tag = args.tag or args.framework
+tag = args.tag or args.stage or args.framework
 image_name = f"{short_image_name}:{tag}"
 
 if args.commit:

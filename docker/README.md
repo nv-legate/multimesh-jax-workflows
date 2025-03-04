@@ -48,4 +48,5 @@ This will produce an image named `legate-jax-dev:maxtext` that can be tagged and
 The image will contain all the code from the repos and installs Python libraries in 
 editable mode and enables rebuilds of the C++ libraries. To build without the remote cache,
 use the `--no-cache` option to the build. For a full list of options see `./build.py --help`.
-
+If you just need a base image for your devcontainer, make sure to specify 
+`--stage devcontainer_base` to get an appropriate image.

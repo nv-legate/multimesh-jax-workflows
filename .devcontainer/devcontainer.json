@@ -10,7 +10,7 @@
     "source=${localWorkspaceFolder}/maxtext,target=/opt/workspace/maxtext-scripts,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/docker/workspace/mount,target=/opt/workspace/mount,type=bind,consistency=cached"
   ],
-  "image": "legate-jax-dev:maxtext",
+  "image": "legate-jax-dev:devcontainer_base",
   "workspaceMount": "source=${localWorkspaceFolder}/docker/workspace,target=/opt/workspace,type=bind",
   "workspaceFolder": "/opt/workspace",
   "initializeCommand": "${localWorkspaceFolder}/.devcontainer/bootstrap-devcontainer.sh ${localWorkspaceFolder}",
