@@ -53,6 +53,10 @@ jobs:
       - name: Get submodule SHAs from versions.json
         run: |
           cd ${LEGATE_JAX_WORKFLOWS_DIR}
+
+          # TODO: delete this line
+          VERSIONS_JSON_FILE=./versions.json
+
           SUBMODULE_SHAS=$(git config -f .gitmodules -l | .github/scripts/gitmodules2json.py | jq -s '
             . as [ $obj1, $obj2 ]
             | $obj1
