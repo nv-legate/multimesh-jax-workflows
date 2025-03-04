@@ -38,9 +38,11 @@ jobs:
 
           LEGATE_JAX_DIR=$(git config -f .gitmodules -l | .github/scripts/gitmodules2json.py | jq -r '."legate-jax".path')
 
-          echo "LEGATE_JAX_DIR=${LEGATE_JAX_DIR}" >> $GITHUB_ENV
+          cd ${LEGATE_JAX_DIR}
 
-          VERSIONS_JSON_FILE=${LEGATE_JAX_DIR}/cmake/versions.json
+          echo "LEGATE_JAX_DIR=$(pwd)" >> $GITHUB_ENV
+
+          VERSIONS_JSON_FILE="$(pwd)/cmake/versions.json"
 
           echo "VERSIONS_JSON_FILE=${VERSIONS_JSON_FILE}" >> $GITHUB_ENV
 
