@@ -50,6 +50,28 @@ jobs:
         run: |
           cat ${VERSIONS_JSON_FILE}
 
+      - name: Get submodule SHAs from versions.json
+        run: |
+          cd ${LEGATE_JAX_WORKFLOWS_DIR}
+          SUBMODULE_SHAS=$(git config -f .gitmodules -l | .github/scripts/gitmodules2json.py | jq -s '
+            . as [ $obj1, $obj2 ]
+            | $obj1
+            | to_entries
+            | map(select($obj2.packages[.key] != null))
+            | map({ key: .value.path, value: $obj2.packages[.key].git_tag })
+            | from_entries
+          ' - ${VERSIONS_JSON_FILE} | jq -r 'to_entries | .[] | "\(.key) \(.value)"' -)
+          echo "SUBMODULE_SHAS=${SUBMODULE_SHAS}" >> $GITHUB_ENV
+
+
+      - name: Checkout submodules to SHAs specified in versions.json
+        run: |
+          # cd path/to/submodule
+          # # git fetch --all
+          # git submodule update --remote .
+          # git checkout "$(cat ../../submodule-commit.txt)"
+          echo ${SUBMODULE_SHAS}
+
 
       - name: Bootstrap submodules
         run: |
