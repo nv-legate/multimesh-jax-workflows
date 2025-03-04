@@ -29,50 +29,72 @@ jobs:
           submodules: true
           ssh-key: ${{ secrets.SSH_KEY_NV_SUBMODULES }}
           fetch-depth: 0
+          path: legate-jax-workflows
+
+      - name: Check out legate.jax
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.NV_LEGATE_INTER_REPOS_ACCESS_RO }}
+          ref: 'sandeepd/legate_jax_workflows'
+          fetch-depth: 0
+          path: legate.jax
+
+      - name: Dump versions.json
+        run: |
+          cat legate.jax/cmake/versions.json
+
+      - name: Set environment variables
+        run: |
+          cd legate-jax-workflows
+          echo "LEGATE_JAX_WORKFLOWS_DIR=$(pwd)" >> $GITHUB_ENV
+          cd ../legate.jax
+          echo "LEGATE_JAX_DIR=$(pwd)" >> $GITHUB_ENV
 
       - name: Bootstrap submodules
         run: |
+          cd legate-jax-workflows
           ./bootstrap.sh
 
       # - name: Start Bazel cache
       #   run: |
-      #     cd docker
+      #     cd legate-jax-workflows/docker
       #     ./start-cache.sh
 
-      - name: Generate a development docker image
-        run: |
-          export PATH=$PATH:/opt/miniconda3/bin
-          export CONDA_ENV=ljw
+      # - name: Generate a development docker image
+      #   run: |
+      #     cd legate-jax-workflows
+      #     export PATH=$PATH:/opt/miniconda3/bin
+      #     export CONDA_ENV=ljw
 
-          activate_conda_env() {
-              set +xu
-              eval "$(conda shell.bash hook)"
-              conda activate "${CONDA_ENV}";
-              set -xu
-          }
+      #     activate_conda_env() {
+      #         set +xu
+      #         eval "$(conda shell.bash hook)"
+      #         conda activate "${CONDA_ENV}";
+      #         set -xu
+      #     }
 
-          conda create -n ${CONDA_ENV} -c conda-forge python=3.12 pyyaml subprocess-tee
+      #     conda create -n ${CONDA_ENV} -c conda-forge python=3.12 pyyaml subprocess-tee
 
-          activate_conda_env
+      #     activate_conda_env
 
-          cd docker
-          ./build.py --no-cache --framework maxtext
+      #     cd docker
+      #     ./build.py --no-cache --framework maxtext
 
-          # docker build -t legate-jax-dev:maxtext - <<EOF
-          # FROM busybox
-          # C_M_D echo "Hello from Busybox"
-          # EOF
+      #     # docker build -t legate-jax-dev:maxtext - <<EOF
+      #     # FROM busybox
+      #     # C_M_D echo "Hello from Busybox"
+      #     # EOF
 
-      - name: Save Docker image to file
-        run: |
-          cd ..
-          mkdir artifacts
-          cd artifacts
-          echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
-          docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
+      # - name: Save Docker image to file
+      #   run: |
+      #     cd ..
+      #     mkdir artifacts
+      #     cd artifacts
+      #     echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
+      #     docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
 
-      - name: Upload Docker image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: legate-jax-dev-maxtext
-          path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
+      # - name: Upload Docker image artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: legate-jax-dev-maxtext
+      #     path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
