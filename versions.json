@@ -1,8 +1,0 @@
-{
-  "packages": {
-    "legate.jax": {
-      "git_url": "https://github.com/nv-legate/legate.jax",
-      "git_tag": "78bbe11b92891efb45060ba450711fd9816d49f4"
-    }
-  }
-}

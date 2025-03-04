@@ -31,24 +31,23 @@ jobs:
           fetch-depth: 0
           path: legate-jax-workflows
 
-      - name: Check out legate.jax
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.NV_LEGATE_INTER_REPOS_ACCESS_RO }}
-          ref: 'sandeepd/legate_jax_workflows'
-          fetch-depth: 0
-          path: legate.jax
-
-      - name: Dump versions.json
-        run: |
-          cat legate.jax/cmake/versions.json
-
       - name: Set environment variables
         run: |
           cd legate-jax-workflows
           echo "LEGATE_JAX_WORKFLOWS_DIR=$(pwd)" >> $GITHUB_ENV
-          cd ../legate.jax
-          echo "LEGATE_JAX_DIR=$(pwd)" >> $GITHUB_ENV
+
+          LEGATE_JAX_DIR=$(git config -f .gitmodules -l | .github/scripts/gitmodules2json.py | jq -r '."legate-jax".path')
+
+          echo "LEGATE_JAX_DIR=${LEGATE_JAX_DIR}" >> $GITHUB_ENV
+
+          VERSIONS_JSON_FILE=${LEGATE_JAX_DIR}/cmake/versions.json
+
+          echo "VERSIONS_JSON_FILE=${VERSIONS_JSON_FILE}" >> $GITHUB_ENV
+
+      - name: Dump versions.json
+        run: |
+          cat ${VERSIONS_JSON_FILE}
+
 
       - name: Bootstrap submodules
         run: |
