@@ -16,7 +16,8 @@ on:
 
 jobs:
   build:
-    runs-on: linux-amd64-20cpu
+    # runs-on: linux-amd64-20cpu
+    runs-on: linux-amd64-cpu16
 
     defaults:
       run:
@@ -29,116 +30,43 @@ jobs:
           submodules: true
           ssh-key: ${{ secrets.SSH_KEY_NV_SUBMODULES }}
           fetch-depth: 0
-          path: legate-jax-workflows
 
-      - name: Set environment variables
+      - name: Generate a development docker image
         run: |
-          cd legate-jax-workflows
-          echo "LEGATE_JAX_WORKFLOWS_DIR=$(pwd)" >> $GITHUB_ENV
+          export PATH=$PATH:/opt/miniconda3/bin
+          export CONDA_ENV=ljw
 
-          LEGATE_JAX_DIR=$(git config -f .gitmodules -l | .github/scripts/gitmodules2json.py | jq -r '."legate-jax".path')
+          activate_conda_env() {
+              set +xu
+              eval "$(conda shell.bash hook)"
+              conda activate "${CONDA_ENV}";
+              set -xu
+          }
 
-          cd ${LEGATE_JAX_DIR}
+          conda create -n ${CONDA_ENV} -c conda-forge python=3.12
 
-          echo "LEGATE_JAX_DIR=$(pwd)" >> $GITHUB_ENV
+          activate_conda_env
 
-          VERSIONS_JSON_FILE="$(pwd)/cmake/versions.json"
-
-          echo "VERSIONS_JSON_FILE=${VERSIONS_JSON_FILE}" >> $GITHUB_ENV
-
-      - name: Dump versions.json
-        run: |
-          cat ${VERSIONS_JSON_FILE}
-
-      - name: Get submodule SHAs from versions.json and update the submodules
-        run: |
-          cd ${LEGATE_JAX_WORKFLOWS_DIR}
-
-          # TODO: delete this line
-          VERSIONS_JSON_FILE=./versions.json
-
-          SUBMODULE_SHAS=$(git config -f .gitmodules -l | .github/scripts/gitmodules2json.py | jq -s '
-            . as [ $obj1, $obj2 ]
-            | $obj1
-            | to_entries
-            | map(select($obj2.packages[.key] != null))
-            | map({ key: .value.path, value: $obj2.packages[.key].git_tag })
-            | from_entries
-          ' - ${VERSIONS_JSON_FILE} | jq -r 'to_entries | .[] | "\(.key) \(.value)"' -)
-
-          echo "SUBMODULE_SHAS=${SUBMODULE_SHAS}" >> $GITHUB_ENV
-
-          # Read each line, splitting into path and commit
-          while read -r repo_path commit_sha; do
-            echo "Entering $repo_path and checking out $commit_sha..."
-            # Go into the repo directory
-            cd "$repo_path" || exit 1
-
-            # Fetch all branches/tags
-            git fetch --all
-
-            # Check out the specified commit
-            git checkout "$commit_sha"
-
-            # Return to the previous directory
-            cd - > /dev/null
-          done <<< "${SUBMODULE_SHAS}"
-
-
-      - name: Checkout submodules to SHAs specified in versions.json
-        run: |
-          # cd path/to/submodule
-          # # git fetch --all
-          # git submodule update --remote .
-          # git checkout "$(cat ../../submodule-commit.txt)"
-          echo ${SUBMODULE_SHAS}
-
-
-      - name: Bootstrap submodules
-        run: |
-          cd legate-jax-workflows
           ./bootstrap.sh
 
-      # - name: Start Bazel cache
-      #   run: |
-      #     cd legate-jax-workflows/docker
-      #     ./start-cache.sh
+          # cd docker
+          # ./build.py --no-cache --framework maxtext
 
-      # - name: Generate a development docker image
-      #   run: |
-      #     cd legate-jax-workflows
-      #     export PATH=$PATH:/opt/miniconda3/bin
-      #     export CONDA_ENV=ljw
+          docker build -t legate-jax-dev:maxtext - <<EOF
+          FROM busybox
+          CMD echo "Hello from Busybox"
+          EOF
 
-      #     activate_conda_env() {
-      #         set +xu
-      #         eval "$(conda shell.bash hook)"
-      #         conda activate "${CONDA_ENV}";
-      #         set -xu
-      #     }
+      - name: Save Docker image to file
+        run: |
+          cd ..
+          mkdir artifacts
+          cd artifacts
+          echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
+          docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
 
-      #     conda create -n ${CONDA_ENV} -c conda-forge python=3.12 pyyaml subprocess-tee
-
-      #     activate_conda_env
-
-      #     cd docker
-      #     ./build.py --no-cache --framework maxtext
-
-      #     # docker build -t legate-jax-dev:maxtext - <<EOF
-      #     # FROM busybox
-      #     # C_M_D echo "Hello from Busybox"
-      #     # EOF
-
-      # - name: Save Docker image to file
-      #   run: |
-      #     cd ..
-      #     mkdir artifacts
-      #     cd artifacts
-      #     echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
-      #     docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
-
-      # - name: Upload Docker image artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: legate-jax-dev-maxtext
-      #     path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: legate-jax-dev-maxtext
+          path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
