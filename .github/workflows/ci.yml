@@ -40,24 +40,20 @@ jobs:
           channels: conda-forge
           activate-environment: LJW
 
-      - name: Check Conda environment
-        run: conda info
-
       - name: Generate a development docker image
         run: |
-          # export PATH=$PATH:/opt/miniconda3/bin
-          # export CONDA_ENV=LJW
+          export CONDA_ENV=LJW
 
-          # activate_conda_env() {
-          #     set +xu
-          #     eval "$(conda shell.bash hook)"
-          #     conda activate "${CONDA_ENV}";
-          #     set -xu
-          # }
+          activate_conda_env() {
+              set +xu
+              eval "$(conda shell.bash hook)"
+              conda activate "${CONDA_ENV}";
+              set -xu
+          }
 
-          # conda create -n ${CONDA_ENV} -c conda-forge python=3.12
+          activate_conda_env
 
-          # activate_conda_env
+          conda info
 
           ./bootstrap.sh
 
