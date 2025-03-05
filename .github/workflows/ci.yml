@@ -16,7 +16,6 @@ on:
 
 jobs:
   build:
-    # runs-on: linux-amd64-20cpu
     runs-on: linux-amd64-cpu16
 
     defaults:
@@ -59,11 +58,6 @@ jobs:
 
           cd docker
           ./build.py --no-cache --framework maxtext
-
-          # docker build -t legate-jax-dev:maxtext - <<EOF
-          # FROM busybox
-          # CMD echo "Hello from Busybox"
-          # EOF
 
       - name: Save Docker image to file
         run: |
