@@ -7,6 +7,7 @@ import os
 import subprocess as sp
 from pathlib import Path
 
+
 import yaml
 from subprocess_tee import run
 from subprocess import CalledProcessError
@@ -194,9 +195,7 @@ try:
             f"COMMIT_IMAGE={temp_image_name}",
             ".",
         ]
-    else:
-        cmds.append("--build-arg")
-        cmds.append("BAZEL_CACHE=")
+        run(cmds, check=True)
 
         # remove the temp commit image
         cmds = ["docker", "rmi", "-f", temp_image_name]
@@ -238,6 +237,7 @@ try:
         print(" ".join(cmds))
 
         output = run(cmds, check=True)
+
 except CalledProcessError as cp:
     if cp.returncode != 0:
         sys.exit(cp.returncode)
