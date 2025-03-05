@@ -222,6 +222,9 @@ try:
                 "--add-host",
                 f"host.docker.internal:{args.cache_addr}",
             ]
+        else:
+            cmds.append("--build-arg")
+            cmds.append("BAZEL_CACHE=")
 
         for arg, value in (
             ("LEGATE_BUILD_TYPE", args.build_type),
