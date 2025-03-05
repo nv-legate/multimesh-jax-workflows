@@ -37,7 +37,7 @@ pushd /opt/workspace/legate-jax
 popd
 
 pushd /opt/workspace/jax
-/opt/build-jaxlib.sh ${BAZEL_CACHE} ${BUILD_DIR}/jaxlib
+/opt/build-jaxlib.sh ${BUILD_DIR}/jaxlib ${BAZEL_CACHE}
 /opt/install-jaxlib.sh ${BUILD_DIR}/jaxlib
 popd
 
