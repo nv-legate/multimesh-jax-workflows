@@ -110,6 +110,8 @@ jobs:
           docker push "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
 
   test:
+    needs:
+      - build
     runs-on: linux-amd64-2gpu
 
     container:
