@@ -34,7 +34,7 @@ jobs:
           cd artifacts
           echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
 
-      - name: Cache node_modules
+      - name: Cache image
         uses: actions/cache@v4
         with:
           path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
@@ -115,7 +115,7 @@ jobs:
     runs-on: linux-amd64-2gpu
 
     container:
-      options: --cap-add SYS_ADMIN --entrypoint /opt/entrypoint.sh --net=host --add-host=host.docker.internal:host-gateway -w /opt/workspace/legate-jax --gpus 0
+      options: --cap-add SYS_ADMIN --entrypoint /opt/entrypoint.sh -w /opt/workspace/legate-jax --gpus 0
       image: ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext
       env:
         NVIDIA_VISIBLE_DEVICES: ${{ env.NVIDIA_VISIBLE_DEVICES }}
