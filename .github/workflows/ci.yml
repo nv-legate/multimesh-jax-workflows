@@ -81,21 +81,21 @@ jobs:
           CMD ["echo", "Hello from busybox!"]
           EOF
 
-      # - name: Save Docker image to file
-      #   run: |
-      #     cd ..
-      #     mkdir artifacts
-      #     cd artifacts
-      #     echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
-      #     docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
+      - name: Save Docker image to file
+        run: |
+          cd ..
+          mkdir artifacts
+          cd artifacts
+          echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
+          docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
 
 
 
-      # - name: Upload Docker image artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: legate-jax-dev-maxtext
-      #     path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: legate-jax-dev-maxtext
+          path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
