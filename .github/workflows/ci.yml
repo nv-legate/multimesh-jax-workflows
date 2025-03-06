@@ -11,7 +11,7 @@ on:
       - "pull-request/[0-9]+"
       - "branch-*"
       - "main"
-      - "sandeepd/add_ci"
+      - "sandeepd/*"
   merge_group:
 
 permissions:
