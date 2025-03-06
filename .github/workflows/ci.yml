@@ -84,7 +84,7 @@ jobs:
       - name: Save Docker image to file
         run: |
           cd ..
-          mkdir artifacts
+          mkdir -p artifacts
           cd artifacts
           echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
           docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
