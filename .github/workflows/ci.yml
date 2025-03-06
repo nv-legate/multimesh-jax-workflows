@@ -14,6 +14,10 @@ on:
       - "sandeepd/add_ci"
   merge_group:
 
+permissions:
+  packages: write
+  contents: read
+
 jobs:
   build:
     runs-on: linux-amd64-cpu16
@@ -23,6 +27,19 @@ jobs:
         shell: bash -xeuo pipefail {0}
 
     steps:
+      - name: Setup env vars
+        run: |
+          cd ..
+          mkdir artifacts
+          cd artifacts
+          echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
+          key: legate-jax-dev-maxtext
+
       - name: Check out repository code
         uses: actions/checkout@v4
         with:
@@ -41,34 +58,88 @@ jobs:
 
       - name: Generate a development docker image
         run: |
-          export CONDA_ENV=LJW
+          # export CONDA_ENV=LJW
 
-          activate_conda_env() {
-              set +xu
-              eval "$(conda shell.bash hook)"
-              conda activate "${CONDA_ENV}";
-              set -xu
-          }
+          # activate_conda_env() {
+          #     set +xu
+          #     eval "$(conda shell.bash hook)"
+          #     conda activate "${CONDA_ENV}";
+          #     set -xu
+          # }
 
-          activate_conda_env
+          # activate_conda_env
 
-          conda info
+          # conda info
 
-          ./bootstrap.sh
+          # ./bootstrap.sh
 
-          cd docker
-          ./build.py --no-cache --framework maxtext
+          # cd docker
+          # ./build.py --no-cache --framework maxtext
 
-      - name: Save Docker image to file
-        run: |
-          cd ..
-          mkdir artifacts
-          cd artifacts
-          echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
-          docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
+          docker build -t legate-jax-dev:maxtext - <<EOF
+          FROM busybox
+          CMD ["echo", "Hello from busybox!"]
+          EOF
 
-      - name: Upload Docker image artifact
-        uses: actions/upload-artifact@v4
+      # - name: Save Docker image to file
+      #   run: |
+      #     cd ..
+      #     mkdir artifacts
+      #     cd artifacts
+      #     echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
+      #     docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
+
+
+
+      # - name: Upload Docker image artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: legate-jax-dev-maxtext
+      #     path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          name: legate-jax-dev-maxtext
-          path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image to ghcr.io
+        run: |
+          docker tag "legate-jax-dev:maxtext" "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
+          docker push "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
+
+  test:
+    runs-on: linux-amd64-2gpu
+
+    container:
+      options: --cap-add SYS_ADMIN --entrypoint /opt/entrypoint.sh --net=host --add-host=host.docker.internal:host-gateway -w /opt/workspace/legate-jax --gpus 0
+      image: ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext
+      env:
+        NVIDIA_VISIBLE_DEVICES: ${{ env.NVIDIA_VISIBLE_DEVICES }}
+
+    defaults:
+      run:
+        shell: bash -xeuo pipefail {0}
+
+    steps:
+      # - name: Check out repository code
+      #   uses: actions/checkout@v4
+      #   with:
+      #     submodules: true
+      #     ssh-key: ${{ secrets.SSH_KEY_NV_SUBMODULES }}
+      #     fetch-depth: 0
+
+      - name: Run Microbatch smoke test
+        run: |
+          python tests/python/jax_microbatch_test.py --cpus 1
+
+      - name: Run Task unit tests
+        run: |
+          for n in 2 4 8; do
+            python tests/python/jax_auto_task_test.py --cpus $n
+          done
+
+      - name: Run Maxtext validation
+        run: |
+          ./validate-cpu.sh
