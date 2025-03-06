@@ -35,6 +35,33 @@ jobs:
           ssh-key: ${{ secrets.SSH_KEY_NV_SUBMODULES }}
           fetch-depth: 0
 
+      - name: Stop all Docker containers
+        run: |
+          # Only try to stop if there are running containers.
+          if [ -n "$(docker ps -q)" ]; then
+            docker stop $(docker ps -q)
+          fi
+
+      - name: Setup environment variables
+        run: |
+          cd ..
+          mkdir -p cache
+          cd cache
+          echo "CACHE_DIR=$(pwd)" >> $GITHUB_ENV
+
+      - name: Restore cache
+        id: cache-build
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: legate-jax-workflows
+
+      - name: Start bazel cache
+        run: |
+          docker run -u 1000:1000 -d -v ${{ env.CACHE_DIR }}:/data \
+            -p 9090:8080 -p 9092:9092 buchgr/bazel-remote-cache \
+            --max_size 30
+
       - name: Set up Miniconda
         if: steps.cache-build.outputs.cache-hit != 'true'
         uses: conda-incubator/setup-miniconda@v3
