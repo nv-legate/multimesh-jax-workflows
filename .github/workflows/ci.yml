@@ -35,12 +35,14 @@ jobs:
           echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
 
       - name: Cache image
+        id: cache-build
         uses: actions/cache@v4
         with:
           path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
           key: legate-jax-dev-maxtext
 
       - name: Check out repository code
+        if: steps.cache-build.outputs.cache-hit == 'true'
         uses: actions/checkout@v4
         with:
           submodules: true
@@ -48,6 +50,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Miniconda
+        if: steps.cache-build.outputs.cache-hit == 'true'
         uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: 3.12
@@ -57,6 +60,7 @@ jobs:
           activate-environment: LJW
 
       - name: Generate a development docker image
+        if: steps.cache-build.outputs.cache-hit == 'true'
         run: |
           export CONDA_ENV=LJW
 
@@ -82,6 +86,7 @@ jobs:
           # EOF
 
       - name: Save Docker image to file
+        if: steps.cache-build.outputs.cache-hit == 'true'
         run: |
           cd ..
           mkdir -p artifacts
@@ -90,12 +95,14 @@ jobs:
           docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
 
       - name: Upload Docker image artifact
+        if: steps.cache-build.outputs.cache-hit == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: legate-jax-dev-maxtext
           path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
 
       - name: Log in to GHCR
+        if: steps.cache-build.outputs.cache-hit == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -103,6 +110,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push image to ghcr.io
+        if: steps.cache-build.outputs.cache-hit == 'true'
         run: |
           docker tag "legate-jax-dev:maxtext" "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
           docker push "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
