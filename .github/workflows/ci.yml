@@ -85,6 +85,20 @@ jobs:
           # CMD ["echo", "Hello from busybox!"]
           # EOF
 
+      - name: Log in to GHCR
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image to ghcr.io
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        run: |
+          docker tag "legate-jax-dev:maxtext" "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
+          docker push "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
+
       - name: Save Docker image to file
         if: steps.cache-build.outputs.cache-hit != 'true'
         run: |
@@ -101,27 +115,13 @@ jobs:
           name: legate-jax-dev-maxtext
           path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
 
-      - name: Log in to GHCR
-        if: steps.cache-build.outputs.cache-hit != 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push image to ghcr.io
-        if: steps.cache-build.outputs.cache-hit != 'true'
-        run: |
-          docker tag "legate-jax-dev:maxtext" "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
-          docker push "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
-
   test:
     needs:
       - build
     runs-on: linux-amd64-2gpu
 
     container:
-      options: --cap-add SYS_ADMIN --entrypoint /opt/entrypoint.sh -w /opt/workspace/legate-jax --gpus 0
+      options: --cap-add SYS_ADMIN --entrypoint /opt/entrypoint.sh --gpus 0
       image: ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext
       env:
         NVIDIA_VISIBLE_DEVICES: ${{ env.NVIDIA_VISIBLE_DEVICES }}
@@ -129,6 +129,7 @@ jobs:
     defaults:
       run:
         shell: bash -xeuo pipefail {0}
+        working-directory: /opt/workspace/legate-jax
 
     steps:
       # - name: Check out repository code
