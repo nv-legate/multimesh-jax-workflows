@@ -40,12 +40,12 @@ jobs:
           path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
           key: legate-jax-dev-maxtext
 
-      - name: Check out repository code
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-          ssh-key: ${{ secrets.SSH_KEY_NV_SUBMODULES }}
-          fetch-depth: 0
+      # - name: Check out repository code
+      #   uses: actions/checkout@v4
+      #   with:
+      #     submodules: true
+      #     ssh-key: ${{ secrets.SSH_KEY_NV_SUBMODULES }}
+      #     fetch-depth: 0
 
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v3
