@@ -27,20 +27,6 @@ jobs:
         shell: bash -xeuo pipefail {0}
 
     steps:
-      - name: Setup env vars
-        run: |
-          cd ..
-          mkdir artifacts
-          cd artifacts
-          echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
-
-      - name: Cache image
-        id: cache-build
-        uses: actions/cache@v4
-        with:
-          path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
-          key: legate-jax-dev-maxtext
-
       - name: Check out repository code
         if: steps.cache-build.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
@@ -80,11 +66,6 @@ jobs:
           cd docker
           ./build.py --no-cache --framework maxtext
 
-          # docker build -t legate-jax-dev:maxtext - <<EOF
-          # FROM busybox
-          # CMD ["echo", "Hello from busybox!"]
-          # EOF
-
       - name: Log in to GHCR
         if: steps.cache-build.outputs.cache-hit != 'true'
         uses: docker/login-action@v3
@@ -98,22 +79,6 @@ jobs:
         run: |
           docker tag "legate-jax-dev:maxtext" "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
           docker push "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
-
-      - name: Save Docker image to file
-        if: steps.cache-build.outputs.cache-hit != 'true'
-        run: |
-          cd ..
-          mkdir -p artifacts
-          cd artifacts
-          echo "ARTIFACTS_DIR=$(pwd)" >> $GITHUB_ENV
-          docker save legate-jax-dev:maxtext -o legate-jax-dev-maxtext.tar
-
-      - name: Upload Docker image artifact
-        if: steps.cache-build.outputs.cache-hit != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: legate-jax-dev-maxtext
-          path: "${{ env.ARTIFACTS_DIR }}/legate-jax-dev-maxtext.tar"
 
   test:
     needs:
@@ -132,13 +97,6 @@ jobs:
         working-directory: /opt/workspace/legate-jax
 
     steps:
-      # - name: Check out repository code
-      #   uses: actions/checkout@v4
-      #   with:
-      #     submodules: true
-      #     ssh-key: ${{ secrets.SSH_KEY_NV_SUBMODULES }}
-      #     fetch-depth: 0
-
       - name: Run Microbatch smoke test
         run: |
           python tests/python/jax_microbatch_test.py --cpus 1
