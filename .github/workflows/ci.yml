@@ -1,0 +1,139 @@
+---
+name: Build docker image
+
+concurrency:
+  group: ${{ startsWith(github.ref_name, 'main') && format('unique-{0}', github.run_id) || format('ci-build-docker-image-{0}-from-{1}', github.event_name, github.ref_name) }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - "pull-request/[0-9]+"
+      - "branch-*"
+      - "main"
+      - "sandeepd/*"
+  merge_group:
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: linux-amd64-cpu16
+
+    defaults:
+      run:
+        shell: bash -xeuo pipefail {0}
+
+    steps:
+      - name: Check out repository code
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          ssh-key: ${{ secrets.SSH_KEY_NV_SUBMODULES }}
+          fetch-depth: 0
+
+      - name: Stop all Docker containers
+        run: |
+          # Only try to stop if there are running containers.
+          if [ -n "$(docker ps -q)" ]; then
+            docker stop $(docker ps -q)
+          fi
+
+      - name: Setup environment variables
+        run: |
+          cd ..
+          mkdir -p cache
+          cd cache
+          echo "CACHE_DIR=$(pwd)" >> $GITHUB_ENV
+
+      - name: Restore cache
+        id: cache-build
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: legate-jax-workflows
+
+      - name: Start bazel cache
+        run: |
+          docker run -u 1000:1000 -d -v ${{ env.CACHE_DIR }}:/data \
+            -p 9090:8080 -p 9092:9092 buchgr/bazel-remote-cache \
+            --max_size 30
+
+      - name: Set up Miniconda
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: 3.12
+          auto-update-conda: true
+          use-mamba: true
+          channels: conda-forge,defaults
+          activate-environment: LJW
+
+      - name: Generate a development docker image
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        run: |
+          export CONDA_ENV=LJW
+
+          activate_conda_env() {
+              set +xu
+              eval "$(conda shell.bash hook)"
+              conda activate "${CONDA_ENV}";
+              set -xu
+          }
+
+          activate_conda_env
+
+          conda info
+
+          ./bootstrap.sh
+
+          cd docker
+          ./build.py --no-cache --framework maxtext
+
+      - name: Log in to GHCR
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image to ghcr.io
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        run: |
+          docker tag "legate-jax-dev:maxtext" "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
+          docker push "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
+
+  test:
+    needs:
+      - build
+    runs-on: linux-amd64-2gpu
+
+    container:
+      options: --cap-add SYS_ADMIN --entrypoint /opt/entrypoint.sh --gpus 0
+      image: ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext
+      env:
+        NVIDIA_VISIBLE_DEVICES: ${{ env.NVIDIA_VISIBLE_DEVICES }}
+
+    defaults:
+      run:
+        shell: bash -xeuo pipefail {0}
+        working-directory: /opt/workspace/legate-jax
+
+    steps:
+      - name: Run Microbatch smoke test
+        run: |
+          python tests/python/jax_microbatch_test.py --cpus 1
+
+      - name: Run Task unit tests
+        run: |
+          for n in 2 4 8; do
+            python tests/python/jax_auto_task_test.py --cpus $n
+          done
+
+      - name: Run Maxtext validation
+        run: |
+          ./validate-cpu.sh
