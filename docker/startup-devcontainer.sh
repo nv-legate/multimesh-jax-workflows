@@ -31,7 +31,7 @@ pushd /opt/workspace/xla
 popd
 
 pushd /opt/workspace/legate-jax
-/opt/configure-legate-jax.sh ${BUILD_TYPE} ${BUILD_DIR}/legate-jax ${BUILD_DIR}/realm ${BUILD_DIR}/zuku ${LIB_DIR}
+/opt/configure-legate-jax.sh ${BUILD_TYPE} ${BUILD_DIR}/legate-jax ${BUILD_DIR}/realm ${BUILD_DIR}/zuku ${LIB_DIR} ${BAZEL_CACHE}
 /opt/build-legate-jax.sh ${BUILD_DIR}/legate-jax
 /opt/install-legate-jax.sh ${BUILD_DIR}/legate-jax -e
 popd
