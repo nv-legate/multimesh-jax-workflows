@@ -1,8 +1,8 @@
 diff --git a/MaxText/configs/base.yml b/MaxText/configs/base.yml
-index 4c4a6751..6175cc1e 100644
+index 7a536405..7bfc5c22 100644
 --- a/MaxText/configs/base.yml
 +++ b/MaxText/configs/base.yml
-@@ -330,7 +330,7 @@ data_shuffle_seed: 0
+@@ -451,7 +451,7 @@ data_shuffle_seed: 0
  init_weights_seed: 0
  
  # You may disable clipping by setting gradient_clipping_threshold to zero.
@@ -13,7 +13,7 @@ index 4c4a6751..6175cc1e 100644
  # batch by accumulating the gradient over a set of steps.
 diff --git a/MaxText/configs/models/gpt3-24layers.yml b/MaxText/configs/models/gpt3-24layers.yml
 new file mode 100644
-index 00000000..8a8f5434
+index 00000000..5b4dafbb
 --- /dev/null
 +++ b/MaxText/configs/models/gpt3-24layers.yml
 @@ -0,0 +1,43 @@
@@ -59,7 +59,7 @@ index 00000000..8a8f5434
 +adam_weight_decay: 0.1
 +checkpoint_period: 10_000
 +target_eval_loss: 2.69
-+eval_per_device_batch_size: 1
++eval_per_device_batch_size: 1.0
 diff --git a/MaxText/configs/models/gpt3-xl.yml b/MaxText/configs/models/gpt3-xl.yml
 new file mode 100644
 index 00000000..fa0946c1
@@ -122,10 +122,10 @@ index 00000000..fa0946c1
 +adam_eps: 1.e-8
 +adam_weight_decay: 0.1
 diff --git a/MaxText/input_pipeline/_hf_data_processing.py b/MaxText/input_pipeline/_hf_data_processing.py
-index 76ef7ce0..a1ed3f34 100644
+index aa32ec74..474682ef 100644
 --- a/MaxText/input_pipeline/_hf_data_processing.py
 +++ b/MaxText/input_pipeline/_hf_data_processing.py
-@@ -117,7 +117,7 @@ def preprocessing_pipeline(
+@@ -125,7 +125,7 @@ def preprocessing_pipeline(
        data_source=dataset,
        operations=operations,
        sampler=dummy_index_sampler,
@@ -134,19 +134,46 @@ index 76ef7ce0..a1ed3f34 100644
        worker_buffer_size=1,
        read_options=grain.ReadOptions(num_threads=num_threads, prefetch_buffer_size=128),
    )
+diff --git a/MaxText/layers/models.py b/MaxText/layers/models.py
+index 2d13f1d8..66a0496e 100644
+--- a/MaxText/layers/models.py
++++ b/MaxText/layers/models.py
+@@ -189,7 +189,7 @@ class Decoder(nn.Module):
+     """Initialize decoder layer."""
+     self.decoder_layer = self.get_decoder_layers()
+     self.norm_layer = self.get_norm_layer()
+-    if self.config.using_pipeline_parallelism:
++    if False and self.config.using_pipeline_parallelism:
+       pipeline_stage_module = self.get_pipeline_stage_module(self.decoder_layer[0])
+       remat_policy = self.get_remat_policy()
+       self.pipeline_module = pipeline.Pipeline(
+@@ -412,7 +412,7 @@ class Decoder(nn.Module):
+     policy = self.get_remat_policy()
+     RemattedBlockLayers = self.set_remat_policy(self.decoder_layer, policy)
+
+-    if cfg.using_pipeline_parallelism:
++    if False and cfg.using_pipeline_parallelism:
+       if cfg.pipeline_fsdp_ag_once:
+         partition_spec = self.pipeline_module.get_weight_sharding(
+             y, decoder_segment_ids, decoder_positions, deterministic, model_mode
 diff --git a/MaxText/max_utils.py b/MaxText/max_utils.py
-index 897674e2..d07de3c0 100644
+index 9ec7ac63..d35dcd79 100644
 --- a/MaxText/max_utils.py
 +++ b/MaxText/max_utils.py
-@@ -29,6 +29,7 @@ import numpy as np
- import jax
- import jax.numpy as jnp
- from jax.experimental import mesh_utils
+@@ -35,7 +35,11 @@ from typing import Any, Tuple
+
+ import max_logging
+
+-
++import numpy as np
++import jax
++import jax.numpy as jnp
++from jax.experimental import mesh_utils
 +from jax.experimental.pjit import pjit
  import orbax.checkpoint as ocp
  import orbax.checkpoint.experimental.emergency.checkpoint_manager as emergency_checkpoint_manager
- 
-@@ -95,8 +96,11 @@ def summarize_size_from_pytree(params):
+ import orbax.checkpoint.experimental.emergency.replicator_checkpoint_manager as emergency_replicator_checkpoint_manager
+@@ -110,8 +114,11 @@ def summarize_size_from_pytree(params):
  
  
  def initialize_summary_writer(config):
@@ -160,7 +187,7 @@ index 897674e2..d07de3c0 100644
  
  
  def close_summary_writer(summary_writer):
-@@ -128,14 +132,16 @@ def write_metrics_locally(metrics, step, config, file, is_training=True):
+@@ -121,14 +128,16 @@ def close_summary_writer(summary_writer):
  
  def add_config_to_summary_writer(config, summary_writer):
    """Writes config params to tensorboard"""
@@ -179,7 +206,7 @@ index 897674e2..d07de3c0 100644
      summary_writer.add_text(key, value)
  
  
-@@ -163,6 +169,7 @@ def write_config_raw_keys_for_gcs(raw_keys):
+@@ -136,6 +145,7 @@ def write_config_raw_keys_for_gcs(raw_keys):
    """Writes config raw keys to GCS"""
    if not raw_keys["save_config_to_gcs"] or jax.process_index() != 0:
      return
@@ -187,15 +214,19 @@ index 897674e2..d07de3c0 100644
    max_logging.log("Writing config to GCS...")
  
    raw_keys_dict = dict(raw_keys)
-@@ -225,7 +232,6 @@ def maybe_initialize_jax_distributed_system(raw_keys):
+@@ -238,6 +248,11 @@ def maybe_initialize_jax_distributed_system(raw_keys):
        initialize_jax_for_tpu_with_emergency_checkpointing(raw_keys)
      max_logging.log("Jax distributed system initialized!")
  
--
- def initialize_jax_for_gpu():
++  max_logging.log(f"JAX process: {jax.process_index()} / {jax.process_count()}")
++  max_logging.log(f"JAX devices: {jax.devices()}")
++  max_logging.log(f"jax.device_count(): {jax.device_count()}")
++  max_logging.log(f"jax.local_device_count(): {jax.local_device_count()}")
++  max_logging.log(f"jax.process_count(): {jax.process_count()}")
+
+ def initialize_jax_for_gpu(raw_keys):
    """Jax distributed initialize for GPUs."""
-   if os.environ.get("JAX_COORDINATOR_IP") is not None:
-@@ -244,17 +250,17 @@ def initialize_jax_for_cpu():
+@@ -258,18 +273,18 @@ def initialize_jax_for_cpu(raw_keys):
    coordinator_ip_address = get_coordinator_ip_address()
    coordinator_address = coordinator_ip_address + ":1234"  # JAX coordinator port used in XPK
    # Env variables to be set in XPK or otherwise
@@ -209,6 +240,7 @@ index 897674e2..d07de3c0 100644
 -      coordinator_address=coordinator_address,
 -      process_id=pid,
 -      num_processes=int(os.environ.get("JAX_PROCESS_COUNT")),
+-      initialization_timeout=raw_keys["jax_distributed_initialization_timeout"],
 -  )
 +  if (job_index := os.environ.get("JOB_INDEX")) is not None:
 +    job_completion_index = int(os.environ.get("JOB_COMPLETION_INDEX"))
@@ -221,10 +253,11 @@ index 897674e2..d07de3c0 100644
 +        process_id=pid,
 +        num_processes=int(os.environ.get("JAX_PROCESS_COUNT")),
 +    )
++
  
  
- def initialize_jax_for_tpu_with_emergency_checkpointing(raw_keys):
-@@ -498,6 +504,36 @@ def setup_decode_state(model, config, rng, mesh, checkpoint_manager):
+ def _wait_for_file_to_disappear(f, timeout=300):
+@@ -725,6 +740,36 @@ def setup_decode_state(model, config, rng, mesh, checkpoint_manager):
    return state, state_mesh_annotations
  
  
@@ -261,7 +294,7 @@ index 897674e2..d07de3c0 100644
  def setup_training_state(model, data_iterator, tx, config, rng, mesh, checkpoint_manager):
    is_training = True
    return setup_initial_state(
-@@ -512,6 +548,21 @@ def setup_training_state(model, data_iterator, tx, config, rng, mesh, checkpoint
+@@ -739,6 +784,21 @@ def setup_training_state(model, data_iterator, tx, config, rng, mesh, checkpoint
    )
  
  
@@ -283,8 +316,17 @@ index 897674e2..d07de3c0 100644
  def setup_initial_state(
      model,
      data_iterator,
+@@ -769,6 +829,8 @@ def setup_initial_state(
+   unboxed_abstract_state, state_mesh_annotations, state_mesh_shardings = get_abstract_state(
+       model, tx, config, rng, mesh, is_training
+   )
++  # state is not actually needed right now
++  return None, state_mesh_annotations, state_mesh_shardings, data_iterator
+
+   # Initialization
+   with nn_partitioning.axis_rules(config.logical_axis_rules):
 diff --git a/MaxText/maxtext_utils.py b/MaxText/maxtext_utils.py
-index 7e93ad06..7b6516a0 100644
+index c748ea98..22de483e 100644
 --- a/MaxText/maxtext_utils.py
 +++ b/MaxText/maxtext_utils.py
 @@ -19,9 +19,17 @@ limitations under the License.
@@ -305,7 +347,7 @@ index 7e93ad06..7b6516a0 100644
  
  
  import pickle
-@@ -30,6 +38,108 @@ from input_pipeline import input_pipeline_interface
+@@ -30,6 +38,109 @@ from input_pipeline import input_pipeline_interface
  
  OVERWRITE_WITH_GRADIENT = "_overwrite_with_gradient"
  
@@ -353,7 +395,7 @@ index 7e93ad06..7b6516a0 100644
 +
 +  sharding_str_arr = []
 +  def check(inp, inp_sharding, out):
-+    sharding_str_arr.append(f"{inp.shape} {inp.sharding} {out}")
++    sharding_str_arr.append(f"shape={inp.shape} input={inp_sharding} output={out}")
 +    if not inp_sharding.is_equivalent_to(out, len(inp.shape)):
 +      raise Exception("\n".join(sharding_str_arr) + " mismatch")
 +
@@ -362,20 +404,21 @@ index 7e93ad06..7b6516a0 100644
 +  return compiled
 +
 +def get_and_compile_functional_train_with_signature(train_step, mesh, state_mesh_annotations, model, config, shaped_train_args):
++  """Get the shardings (both state and data) for train_step"""
 +  transformer_shape = [(size if (name != 'stage') else 1) for name, size in mesh.shape.items()]
 +  mesh = MeshWrapper(mesh, transformer_shape)
 +
-+  """Get the shardings (both state and data) for train_step"""
-+  functional_train = get_functional_train_step(train_step, model, config)
-+  functional_train.__name__ = "train_step"
-+  data_pspec = P(*config.data_sharding)
-+
 +  def canonicalize_sharding(p):
-+    if isinstance(p, jax.sharding.NamedSharding) or isinstance(p, jax.sharding.GSPMDSharding):
++    if isinstance(p, jax.sharding.GSPMDSharding):
 +      return p
 +    return AUTO(mesh)
 +
 +  state_mesh_shardings = jax.tree_util.tree_map(canonicalize_sharding, state_mesh_annotations)
++
++  functional_train = get_functional_train_step(train_step, model, config, state_mesh_shardings)
++  functional_train.__name__ = "train_step"
++  data_pspec = P(*config.data_sharding)
++
 +  data_sharding = jax.tree_util.tree_map(lambda p: jax.sharding.NamedSharding(mesh, p), data_pspec)
 +  in_shardings = (state_mesh_shardings, data_sharding, None)  # State, batch, rng
 +
@@ -412,26 +455,26 @@ index 7e93ad06..7b6516a0 100644
 +
 +  return compiled, in_shardings, out_shardings, static_argnums, donate_argnums
  
- def get_functional_train_with_signature(train_step, mesh, state_mesh_annotations, model, config):
+ def get_functional_train_with_signature(train_step, mesh, state_mesh_shardings, model, config):
    """Get the shardings (both state and data) for train_step"""
-diff --git a/MaxText/optimizers.py b/MaxText/optimizers.py
-index 6d42644f..332a9590 100644
---- a/MaxText/optimizers.py
-+++ b/MaxText/optimizers.py
-@@ -45,6 +45,8 @@ def get_optimizer(config, learning_rate_schedule):
-         epsilon_root=config.adam_eps_root,
-         weight_decay=config.adam_weight_decay,
-     )
-+  elif config.opt_type == "sgd":
-+    return optax.sgd(learning_rate_schedule)
-   else:
-     raise ValueError(f"{config.opt_type=} is not a supported.")
+diff --git a/MaxText/metric_logger.py b/MaxText/metric_logger.py
+index 9be1e5eb..011a9aae 100644
+--- a/MaxText/metric_logger.py
++++ b/MaxText/metric_logger.py
+@@ -119,7 +119,7 @@ class MetricLogger:
+             f"completed step: {step}, seconds: {metrics['scalar']['perf/step_time_seconds']:.3f}, "
+             f"TFLOP/s/device: {metrics['scalar']['perf/per_device_tflops_per_sec']:.3f}, "
+             f"Tokens/s/device: {metrics['scalar']['perf/per_device_tokens_per_sec']:.3f}, "
+-            f"total_weights: {metrics['scalar']['learning/total_weights']}, "
++#            f"total_weights: {metrics['scalar']['learning/total_weights']}, "
+             f"loss: {metrics['scalar']['learning/loss']:.3f}"
+         )
  
 diff --git a/MaxText/pyconfig.py b/MaxText/pyconfig.py
-index 2ff2926e..883809a8 100644
+index 424e170c..e8730c6b 100644
 --- a/MaxText/pyconfig.py
 +++ b/MaxText/pyconfig.py
-@@ -163,10 +163,20 @@ def validate_model_name(s: str) -> bool:
+@@ -227,10 +227,20 @@ def validate_model_name(s: str) -> bool:
        "gpt3-22b",
        "gpt3-6b",
        "gpt3-52k",
@@ -439,7 +482,7 @@ index 2ff2926e..883809a8 100644
 +      "gpt3-24layers",
    )
    if s not in valid_model_names:
-     raise ValueError("Invalid model name was passed. Valid options ", valid_model_names)
+     raise ValueError(f"Invalid model name was passed. Got {s}, Valid options {valid_model_names}")
  
 +def validate_overrides_consistent(keys1: list[str], keys2: list[str], raw_keys: dict, raw_keys_old: dict):
 +  overwritten_keys = [k for k in keys1 if k in keys2]
@@ -452,7 +495,7 @@ index 2ff2926e..883809a8 100644
  
  def validate_no_keys_overwritten_twice(keys1: list[str], keys2: list[str]):
    overwritten_keys = [k for k in keys1 if k in keys2]
-@@ -276,9 +286,12 @@ class _HyperParameters:
+@@ -370,9 +380,12 @@ class _HyperParameters:
      raw_keys = OrderedDict()
      keys_from_env_and_command_line = self._update_from_env_and_command_line(raw_keys, raw_data_from_yaml, argv, **kwargs)
      max_logging.log(f"Updating keys from env and command line: {keys_from_env_and_command_line}")
@@ -464,58 +507,48 @@ index 2ff2926e..883809a8 100644
 +    validate_overrides_consistent(keys_from_env_and_command_line, keys_from_model, raw_keys, raw_keys_before_model)
 +    #validate_no_keys_overwritten_twice(keys_from_env_and_command_line, keys_from_model)
  
-     # We initialize the jax distributed system here because it must be done before device backend is initialized.
-     max_utils.maybe_initialize_jax_distributed_system(raw_keys)
-@@ -343,7 +356,7 @@ class _HyperParameters:
-     raw_keys["num_slices"] = get_num_slices(raw_keys)
+     # This must be invoked before initializing the backend
+     raw_keys = validate_and_set_hlo_dump_defaults(raw_keys)
+@@ -468,7 +481,7 @@ class _HyperParameters:
+     raw_keys["num_slices"] = max_utils.get_num_slices(raw_keys)
      raw_keys["quantization_local_shard_count"] = get_quantization_local_shard_count(raw_keys)
+     raw_keys = create_parallelisms_list(raw_keys)
+-    raw_keys = set_and_validate_pipeline_config(raw_keys)
++    #raw_keys = set_and_validate_pipeline_config(raw_keys)
  
--    if using_pipeline_parallelism(raw_keys):
-+    if False and using_pipeline_parallelism(raw_keys):
-       raw_keys["using_pipeline_parallelism"] = True
-       num_stages = int(raw_keys["ici_pipeline_parallelism"] * raw_keys["dcn_pipeline_parallelism"])
-       if raw_keys["num_pipeline_repeats"] == -1:
+     if raw_keys["dataset_type"] == "c4_mlperf":
+       raw_keys["add_bos"] = False
 diff --git a/MaxText/train.py b/MaxText/train.py
-index 182dd75e..188b6349 100644
+index 08cbd560..451a08c8 100644
 --- a/MaxText/train.py
 +++ b/MaxText/train.py
-@@ -26,7 +26,7 @@ import sys
- import functools
+@@ -27,7 +27,8 @@ import functools
  import time
+ import queue
  
--from typing import Sequence, Optional
+-from typing import Sequence
++
 +from typing import Optional, Sequence
  from absl import app
  from flax import linen as nn
  from flax.linen import partitioning as nn_partitioning
-@@ -47,6 +47,7 @@ from vertex_tensorboard import VertexTensorboardManager
+@@ -54,6 +55,7 @@ from vertex_tensorboard import VertexTensorboardManager
  # Placeholder: internal
  
  from input_pipeline.input_pipeline_interface import create_data_iterator
 +from input_pipeline import input_pipeline_interface
  from layers import models
  
- import jax.numpy as jnp
-@@ -168,14 +169,14 @@ def write_metrics_to_tensorboard(writer, metrics, step, config, is_training=True
-           f"completed step: {step}, seconds: {metrics['scalar']['perf/step_time_seconds']:.3f}, "
-           f"TFLOP/s/device: {metrics['scalar']['perf/per_device_tflops_per_sec']:.3f}, "
-           f"Tokens/s/device: {metrics['scalar']['perf/per_device_tokens_per_sec']:.3f}, "
--          f"total_weights: {metrics['scalar']['learning/total_weights']}, "
-+          #f"total_weights: {metrics['scalar']['learning/total_weights']}, "
-           f"loss: {metrics['scalar']['learning/loss']:.3f}"
-       )
+ from gcp_workload_monitor import GCPWorkloadMonitor
+@@ -120,7 +122,6 @@ def record_scalar_metrics(metrics, step_time_delta, per_device_tflops, lr, per_d
+   metrics["scalar"].update({"perf/per_device_tokens_per_sec": per_device_tokens / step_time_delta.total_seconds()})
+   metrics["scalar"].update({"learning/current_learning_rate": lr})
  
--      if full_log and jax.process_index() == 0:
--        max_logging.log(f"To see full metrics 'tensorboard --logdir={config.tensorboard_dir}'")
--        writer.flush()
- 
-+    if full_log and jax.process_index() == 0:
-+      max_logging.log(f"To see full metrics 'tensorboard --logdir={config.tensorboard_dir}'")
-+      writer.flush()
- 
- def clear_buffered_metrics():
-   global _buffered_step
-@@ -299,9 +300,12 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
+-
+ def save_checkpoint(
+     checkpoint_manager,
+     step,
+@@ -372,9 +373,12 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
    xent = nn.with_logical_constraint(xent, ("activation_embed_and_logits_batch", "activation_length"))
    # Mask out paddings at the end of each example.
    xent = xent * (data["targets_segmentation"] != 0)
@@ -531,12 +564,10 @@ index 182dd75e..188b6349 100644
    # get moe load balance loss
    moe_lb_loss = 0.0
    if config.num_experts > 1:
-@@ -318,6 +322,22 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
+@@ -391,6 +395,20 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
    return loss, aux
  
  
-+
-+# handling automatic microbatches via legate
 +class MicrobatchConfig:
 +  size: Optional[int] = None
 +  schedule: str = "wavefront"
@@ -551,18 +582,16 @@ index 182dd75e..188b6349 100644
 +    microbatch_config.num_stages = num_stages
 +    microbatch_config.interleave = interleave
 +
- def train_step(model, config, state, data, dropout_rng):
+ def train_step(model, config, state_mesh_shardings, state, data, dropout_rng):
    """
  
-@@ -367,7 +387,28 @@ def train_step(model, config, state, data, dropout_rng):
-     aux = jax.tree_map(lambda x: jnp.sum(x, axis=0), aux)
-   else:
-     grad_func = jax.value_and_grad(loss_fn, argnums=4, has_aux=True)
--    (loss, aux), raw_grads = grad_func(model, config, data, dropout_rng, state.params, is_train=True)
+@@ -456,6 +474,28 @@ def train_step(model, config, state_mesh_shardings, state, data, dropout_rng):
+         extra_dpo_args = [reference_params]
+     grad_func = jax.value_and_grad(_loss_fn, argnums=4, has_aux=True)
+     (loss, aux), raw_grads = grad_func(model, config, data, dropout_rng, state.params, *extra_dpo_args, is_train=True)
 +
-+    ## logging
 +    if microbatch_config.size is None or microbatch_config.size == config.global_batch_size_to_train_on:
-+      (loss, aux), raw_grads = grad_func(model, config, data, dropout_rng, state.params, is_train=True)
++      (loss, aux), raw_grads = grad_func(model, config, data, dropout_rng, state.params, **extra_dpo_args, is_train=True)
 +    else:
 +      from legate.jax import microbatch
 +
@@ -581,41 +610,53 @@ index 182dd75e..188b6349 100644
 +
 +      (loss, aux), raw_grads = mb_grad_func(data, dropout_rng, state.params)
 +
++
    intermediate_outputs = aux["intermediate_outputs"]
    total_weights = aux["total_weights"]
    moe_lb_loss = aux["moe_lb_loss"]
-@@ -380,11 +421,11 @@ def train_step(model, config, state, data, dropout_rng):
-   metrics = {
-       "scalar": {
-           "learning/loss": loss,
--          "learning/moe_lb_loss": moe_lb_loss,
--          "learning/total_weights": total_weights,
--          "learning/grad_norm": max_utils.l2norm_pytree(grads),
--          "learning/raw_grad_norm": max_utils.l2norm_pytree(raw_grads),
--          "learning/param_norm": max_utils.l2norm_pytree(new_state.params),
-+          #"learning/moe_lb_loss": moe_lb_loss,
-+          #"learning/total_weights": total_weights,
-+          #"learning/grad_norm": max_utils.l2norm_pytree(grads),
-+          #"learning/raw_grad_norm": max_utils.l2norm_pytree(raw_grads),
-+          #"learning/param_norm": max_utils.l2norm_pytree(new_state.params),
-       },
-       "scalars": {},
+@@ -475,15 +515,19 @@ def train_step(model, config, state_mesh_shardings, state, data, dropout_rng):
+
+   scalar_metrics = {
+       "learning/loss": loss,
+-      "learning/moe_lb_loss": moe_lb_loss,
+-      "learning/total_weights": total_weights,
++      #"learning/moe_lb_loss": moe_lb_loss,
++      #"learning/total_weights": total_weights,
    }
-@@ -530,15 +571,29 @@ def setup_train_loop(config):
-   record_goodput(recorder, config, recorder.record_training_preparation_start_time if recorder else None)
-   data_iterator, eval_data_iterator = create_data_iterator(config, mesh)
- 
--  state, state_mesh_annotations, data_iterator = max_utils.setup_training_state(
--      model, data_iterator, tx, config, init_rng, mesh, checkpoint_manager
--  )
-+  #state, state_mesh_annotations, data_iterator = max_utils.setup_training_state(
-+  #    model, data_iterator, tx, config, init_rng, mesh, checkpoint_manager
-+  #)
+   if not config.optimizer_memory_host_offload:
+-    scalar_metrics["learning/grad_norm"] = max_utils.l2norm_pytree(grads)
+-    scalar_metrics["learning/raw_grad_norm"] = max_utils.l2norm_pytree(raw_grads)
+-    scalar_metrics["learning/param_norm"] = max_utils.l2norm_pytree(new_state.params)
++    pass
++    #scalar_metrics["learning/grad_norm"] = max_utils.l2norm_pytree(grads)
++    #scalar_metrics["learning/raw_grad_norm"] = max_utils.l2norm_pytree(raw_grads)
++    #scalar_metrics["learning/param_norm"] = max_utils.l2norm_pytree(new_state.params)
 +
+   if config.use_dpo:
+-    scalar_metrics["learning/dpo_reward_accuracy"] = aux["reward_accuracy"]
++    pass
++    #scalar_metrics["learning/dpo_reward_accuracy"] = aux["reward_accuracy"]
++
+   metrics = {
+       "scalar": scalar_metrics,
+       "scalars": {},
+@@ -652,9 +696,9 @@ def setup_train_loop(config):
+       model, data_iterator, tx, config, init_rng, mesh, checkpoint_manager
+   )
+ 
+-  if not config.using_pipeline_parallelism:
+-    # The vocab tensor(s) of shape [vocab, embed] (and transpose) are not sharded by stage
+-    maxtext_utils.assert_params_sufficiently_sharded(state.params, mesh, config.sharding_tolerance)
 +  #if not config.using_pipeline_parallelism:
 +  #  # The vocab tensor(s) of shape [vocab, embed] (and transpose) are not sharded by stage
-+  #  maxtext_utils.assert_params_sufficiently_sharded(state.params, mesh, tolerance=0.02)
-+  #record_goodput(recorder, config, recorder.record_training_preparation_end_time if recorder else None)
++  #  maxtext_utils.assert_params_sufficiently_sharded(state.params, mesh, config.sharding_tolerance)
+
+   if config.use_dpo:
+     abstract_state, _, _ = max_utils.get_abstract_state(model, tx, config, init_rng, mesh, is_training=True)
+@@ -682,7 +726,21 @@ def setup_train_loop(config):
+       )
+
+   record_goodput(recorder, config, recorder.record_training_preparation_end_time if recorder else None)
 +
 +  # Shaped RNG keys
 +  _, example_rng = jax.random.split(jax.random.PRNGKey(0), 2)
@@ -628,17 +669,13 @@ index 182dd75e..188b6349 100644
 +  shaped_batch = input_pipeline_interface.get_shaped_batch(config)
 +
 +  shaped_train_args = (abstract_state, shaped_batch, shaped_rng)
- 
--  if not config.using_pipeline_parallelism:
--    # The vocab tensor(s) of shape [vocab, embed] (and transpose) are not sharded by stage
--    maxtext_utils.assert_params_sufficiently_sharded(state.params, mesh, tolerance=0.02)
--  record_goodput(recorder, config, recorder.record_training_preparation_end_time if recorder else None)
++
    return (
 +      init_state_partial,
        init_rng,
        writer,
        checkpoint_manager,
-@@ -548,7 +603,7 @@ def setup_train_loop(config):
+@@ -692,7 +750,7 @@ def setup_train_loop(config):
        learning_rate_schedule,
        data_iterator,
        eval_data_iterator,
@@ -647,7 +684,7 @@ index 182dd75e..188b6349 100644
    )
  
  
-@@ -565,6 +620,7 @@ def train_loop(config, state=None):
+@@ -709,6 +767,7 @@ def train_loop(config, state=None):
    record_goodput(recorder, config, recorder.record_job_start_time if recorder else None)
  
    (
@@ -655,29 +692,28 @@ index 182dd75e..188b6349 100644
        init_rng,
        writer,
        checkpoint_manager,
-@@ -574,8 +630,9 @@ def train_loop(config, state=None):
+@@ -718,7 +777,7 @@ def train_loop(config, state=None):
        learning_rate_schedule,
        data_iterator,
        eval_data_iterator,
 -      state,
 +      shaped_train_args,
    ) = setup_train_loop(config)
-+
-   # pylint: disable=line-too-long
-   (
-       functional_train,
-@@ -583,7 +640,7 @@ def train_loop(config, state=None):
+
+   if config.use_dpo:
+@@ -734,7 +793,8 @@ def train_loop(config, state=None):
        out_shard_train,
        static_argnums_train,
        donate_argnums_train,
--  ) = maxtext_utils.get_functional_train_with_signature(train_step, mesh, state_mesh_annotations, model, config)
-+  ) = maxtext_utils.get_and_compile_functional_train_with_signature(train_step, mesh, state_mesh_annotations, model, config, shaped_train_args)
+-  ) = maxtext_utils.get_functional_train_with_signature(train_step, mesh, state_mesh_shardings, model, config)
++  ) = maxtext_utils.get_and_compile_functional_train_with_signature(train_step, mesh, state_mesh_shardings, model, config, shaped_train_args)
++
  
    if eval_data_iterator:
      # pylint: disable=line-too-long
-@@ -595,6 +652,9 @@ def train_loop(config, state=None):
+@@ -746,6 +806,9 @@ def train_loop(config, state=None):
          donate_argnums_eval,
-     ) = maxtext_utils.get_functional_eval_with_signature(eval_step, mesh, state_mesh_annotations, model, config)
+     ) = maxtext_utils.get_functional_eval_with_signature(eval_step, mesh, state_mesh_shardings, model, config)
  
 +  # postponed initial state fetch as we needed to evaluate sharding first
 +  state = max_utils.initialize_state_with_sharding(init_state_partial, mesh, in_shard_train[0], in_shard_train[2], init_rng)
@@ -685,7 +721,7 @@ index 182dd75e..188b6349 100644
    num_model_parameters = max_utils.calculate_num_params_from_pytree(state.params)
    max_logging.log(f"number parameters: {num_model_parameters/1e9:.3f} billion")
    per_device_tflops, _, _ = maxtext_utils.calculate_tflops_training_per_device(config)
-@@ -614,15 +674,9 @@ def train_loop(config, state=None):
+@@ -765,15 +828,9 @@ def train_loop(config, state=None):
      p_eval_step = None
      print("Loaded compiled function!", flush=True)
    else:
@@ -703,31 +739,16 @@ index 182dd75e..188b6349 100644
        p_eval_step = jax.jit(
            functional_eval,
            in_shardings=in_shard_eval,
-@@ -675,7 +729,8 @@ def train_loop(config, state=None):
-         checkpoint_manager.wait_until_finished()
-         sys.exit()
- 
--    write_metrics(writer, local_metrics_file, running_gcs_metrics, metrics, step, config)
-+    if writer:
-+      write_metrics(writer, local_metrics_file, running_gcs_metrics, metrics, step, config)
- 
-     if config.eval_interval > 0 and step > start_step and (step + 1) % config.eval_interval == 0:
-       assert eval_data_iterator
-@@ -721,7 +776,8 @@ def train_loop(config, state=None):
- 
-   if checkpoint_manager is not None:
-     checkpoint_manager.wait_until_finished()
--  write_metrics(writer, local_metrics_file, running_gcs_metrics, metrics, config.steps - 1, config)  # final step metrics
-+  if writer:
-+    write_metrics(writer, local_metrics_file, running_gcs_metrics, metrics, config.steps - 1, config)  # final step metrics
-   max_utils.close_summary_writer(writer)
+@@ -906,7 +963,11 @@ def train_loop(config, state=None):
    record_goodput(recorder, config, recorder.record_job_end_time if recorder else None)
-   clear_buffered_metrics()
-@@ -736,6 +792,7 @@ def main(argv: Sequence[str]) -> None:
-   pyconfig.initialize(argv)
-   max_utils.print_system_information()
-   config = pyconfig.config
+   with mesh, nn_partitioning.axis_rules(config.logical_axis_rules):
+     # pytype: disable=attribute-error
+-    compiled = p_train_step.lower(state, example_batch, nextrng).compile()
++    if hasattr(p_train_step, "lower"):
++      compiled = p_train_step.lower(state, example_batch, nextrng).compile()
++    else:
++      compiled = p_train_step
 +
-   validate_train_config(config)
-   os.environ["TFDS_DATA_DIR"] = config.dataset_path
-   vertex_tensorboard_manager = VertexTensorboardManager()
+     compiled_stats = compiled.memory_analysis()
+     if compiled_stats is not None:
+       max_logging.log(

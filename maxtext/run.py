@@ -451,7 +451,6 @@ vmodule = [
     "legate_pjrt_client",
     "legate_pjrt_executable",
     "mpmd_input_output_buffer_alias",
-    "legate_store_cache",
     "loop_scheduler",
     "legate_ifrt_client",
     "hlo_memory_scheduler",
@@ -499,7 +498,6 @@ xla_flags = [
     f"--xla_gpu_enable_while_loop_double_buffering={args.xla_loop_buffering}",  # noqa: E501
     "--xla_gpu_enable_all_gather_combine_by_dim=false",
     "--xla_gpu_enable_reduce_scatter_combine_by_dim=false",
-    "--xla_gpu_enable_triton_softmax_fusion=false",
 ]
 
 
@@ -747,12 +745,15 @@ argv = [
     "this",
     str(config),
     "run_name=my_name",
-    f"base_output_directory=${os.getcwd()}/logs",
+    f"base_output_directory={os.getcwd()}/logs",
     "dataset_type=synthetic",
     "enable_single_controller=False",
     "enable_checkpointing=False",
     f"scan_layers={args.scan_layers}",
     f"per_device_batch_size={per_device_batch_size}",
+    "monitor_goodput=False",
+    "enable_goodput_recording=False",
+    "enable_tensorboard=False",
 ]
 
 if args.model_name is None:

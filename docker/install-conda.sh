@@ -26,7 +26,8 @@ conda run --no-capture-out -n legere \
   conda install -c conda-forge -y \
     python==3.10.6 \
     cmake \
-    ccache
+    ccache \
+    openssh
 
 conda run --no-capture-out -n legere \
   python -m pip install build numpy \

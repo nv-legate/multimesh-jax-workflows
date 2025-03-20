@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+set -e
+
 pushd /opt/workspace/zuku
 
 export CCACHE_DIR=/ccache/zuku

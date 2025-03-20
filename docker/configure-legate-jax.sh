@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+set -e
+
 pushd /opt/workspace/legate-jax
 
 LEGATE_BUILD_TYPE=$1

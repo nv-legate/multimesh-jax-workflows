@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+set -e
+
 pushd /opt/workspace/jax
 
 BUILD_DIR=$1
@@ -36,7 +38,7 @@ else
     remote_cache_option="--bazel_options=--remote_cache=${BAZEL_CACHE}"
 fi
 
-conda run --no-capture-out -n legere python build/build.py \
+conda run --no-capture-out -n legere python build/build.py build \
   --bazel_startup_options=--batch \
   --bazel_options=--override_repository=xla=/opt/workspace/xla \
   $remote_cache_option \
@@ -44,10 +46,7 @@ conda run --no-capture-out -n legere python build/build.py \
   --output_path=/opt/build/jaxlib \
   --use_clang \
   --clang_path=/usr/lib/llvm-17/bin/clang \
-  --build_gpu_plugin \
+  --wheels=jaxlib,jax-cuda-plugin \
   --cuda_version=$TF_CUDA_VERSION \
   --cudnn_version=$TF_CUDNN_VERSION \
-  --gpu_plugin_cuda_version=$TF_CUDA_MAJOR_VERSION \
-  --cuda_compute_capabilities=$TF_CUDA_COMPUTE_CAPABILITIES \
-  --enable_cuda=true \
-  --enable_nccl=true
+  --cuda_compute_capabilities=$TF_CUDA_COMPUTE_CAPABILITIES

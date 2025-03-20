@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+set -e
+
 BUILD_DIR=$1
 editable_flag=${2:-}
 

@@ -31,14 +31,6 @@ except ImportError:
 parser = argparse.ArgumentParser(allow_abbrev=False)
 
 parser.add_argument(
-    "--image",
-    type=str,
-    choices=["opt", "dev"],
-    help="Whether to build a development image with all repos or a size-optimized release image",  # noqa: E501
-    default="dev",
-)
-
-parser.add_argument(
     "--cache", action=argparse.BooleanOptionalAction, default=True
 )  # noqa: E501
 
@@ -166,12 +158,8 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-if args.image == "dev":
-    dockerfile = "Dockerfile"
-    short_image_name = "legate-jax-dev"
-else:
-    dockerfile = "Dockerfile.multi-stage"
-    short_image_name = "legate-jax"
+dockerfile = "Dockerfile"
+short_image_name = "legate-jax-dev"
 
 tag = args.tag or args.stage or args.framework
 image_name = f"{short_image_name}:{tag}"

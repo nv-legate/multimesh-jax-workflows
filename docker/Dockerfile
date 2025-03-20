@@ -50,7 +50,17 @@ RUN /opt/ucx/build-ucx.sh
 FROM mellanox_install AS ucx_install
 RUN --mount=type=cache,from=ucx_build,source=/opt/ucx,target=/opt/ucx \
   cd /opt/ucx && make -j install
-FROM ucx_install AS symlink_cuda
+
+FROM ucx_install AS ucc_build
+COPY ucc /opt/ucc
+COPY build-ucc.sh /opt/ucc
+RUN /opt/ucc/build-ucc.sh
+
+FROM ucx_install AS ucc_install
+RUN --mount=type=cache,from=ucc_build,source=/opt/ucc,target=/opt/ucc \
+  cd /opt/ucc && make -j install
+
+FROM ucc_install AS symlink_cuda
 COPY symlink-cudalibs.sh /opt
 RUN /opt/symlink-cudalibs.sh
 
@@ -58,7 +68,12 @@ FROM symlink_cuda AS te_install
 COPY te /opt/te
 COPY install-te.sh /opt
 RUN conda run -n legere python -m pip install cmake
-RUN --mount=type=bind,source=workspace/xla,target=/opt/xla \
+# Mount a clean XLA source tree distinct from the XLA
+# tree for the plugin. TE only uses the XLA code
+# to query for certain parameters. Any changes to
+# XLA plugin code would otherwise trigger a complete
+# rebuild of TransformerEngine, which is very expensive
+RUN --mount=type=bind,source=te-xla,target=/opt/xla \
   /opt/install-te.sh -e
 
 FROM te_install AS install_clang
@@ -66,27 +81,10 @@ COPY install-clang.sh /opt
 RUN /opt/install-clang.sh
 RUN ln -s /usr/bin/clangd-17 /usr/bin/clangd
 
-FROM install_clang AS copy_common_frameworks
-
-COPY chex /opt/chex
-COPY flax /opt/flax
-COPY clu /opt/clu
-COPY optax opt/optax
-COPY seqio /opt/seqio
-COPY orbax /opt/orbax
-
-FROM copy_common_frameworks AS copy_requirements_maxtext
-COPY maxtext-requirements.txt /opt/requirements.txt
-
-FROM copy_requirements_${FRAMEWORK} AS install_python_libs
-COPY install-pip-dependencies.sh /opt
-RUN /opt/install-pip-dependencies.sh -e
-
-FROM install_python_libs AS maxtext_install
+FROM install_clang AS maxtext_install
 COPY maxtext /opt/maxtext
-RUN cd /opt/maxtext && conda run -n legere python -m pip install -e . --no-deps --no-build-isolation --force-reinstall
-COPY maxtext-fixup-pip.sh /opt
-RUN /opt/maxtext-fixup-pip.sh
+RUN conda run -n legere python -m pip install flit-core
+RUN cd /opt/maxtext && conda run -n legere python -m pip install -e . --no-build-isolation --force-reinstall
 
 FROM ${FRAMEWORK}_install AS copy_scripts
 COPY \

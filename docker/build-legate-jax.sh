@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+set -e
+
 pushd /opt/workspace/legate-jax
 
 export CCACHE_DIR=/ccache/legate-jax

@@ -1,22 +1,6 @@
-[submodule "docker/chex"]
-	path = docker/chex
-	url = https://github.com/google-deepmind/chex.git
-	shallow = true
-[submodule "docker/flax"]
-	path = docker/flax
-	url = https://github.com/google/flax.git
-	shallow = true
-[submodule "docker/clu"]
-	path = docker/clu
-	url = https://github.com/google/CommonLoopUtils.git
-	shallow = true
 [submodule "docker/jax"]
 	path = docker/workspace/jax
 	url = ssh://git@github.com/nv-legate/jax.git
-	shallow = true
-[submodule "docker/optax"]
-	path = docker/optax
-	url = https://github.com/google-deepmind/optax.git
 	shallow = true
 [submodule "docker/nccl"]
 	path = docker/nccl
@@ -38,14 +22,6 @@
 	path = docker/workspace/realm
 	url = https://gitlab.com/StanfordLegion/legion.git
   shallow = true
-[submodule "docker/orbax"]
-	path = docker/orbax
-	url = https://github.com/google/orbax.git
-  shallow = true
-[submodule "docker/seqio"]
-	path = docker/seqio
-	url = https://github.com/google/seqio.git
-  shallow = true
 [submodule "docker/te"]
 	path = docker/te
 	url = https://github.com/NVIDIA/TransformerEngine.git
@@ -57,4 +33,12 @@
 [submodule "docker/ucx"]
 	path = docker/ucx
 	url = https://github.com/openucx/ucx.git
+  shallow = true
+[submodule "docker/te-xla"]
+	path = docker/te-xla
+	url = ssh://git@github.com/nv-legate/xla.git
+  shallow = true
+[submodule "docker/ucc"]
+	path = docker/ucc
+	url = https://github.com/openucx/ucc.git
   shallow = true
