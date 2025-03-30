@@ -6,13 +6,22 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    branches:
-      - "pull-request/[0-9]+"
-      - "branch-*"
-      - "main"
-      - "sandeepd/*"
-  merge_group:
+  workflow_call:
+    inputs:
+      stage:
+        description: 'The Dockerfile stage to build up to'
+        required: true
+        default: 'reinstall_custom_jax'
+        type: string
+      tag:
+        description: 'The docker tag to append to the image: name:tag'
+        required: true
+        default: 'maxtext'
+        type: string
+      base_image:
+        description: 'The base stage/image to build maxtext from'
+        default: 'ghcr.io/nv-legate/legate-jax-dev:base'
+        type: string
 
 permissions:
   packages: write
@@ -27,8 +36,13 @@ jobs:
         shell: bash -xeuo pipefail {0}
 
     steps:
+      - name: Echo input settings
+        run: |
+          echo "Base image = ${{ inputs.base_image }}"
+          echo "Stage = ${{ inputs.stage }}"
+          echo "Tag = ${{ inputs.tag }}"
+
       - name: Check out repository code
-        if: steps.cache-build.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
         with:
           submodules: true
@@ -63,7 +77,6 @@ jobs:
             --max_size 30
 
       - name: Set up Miniconda
-        if: steps.cache-build.outputs.cache-hit != 'true'
         uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: 3.12
@@ -72,8 +85,15 @@ jobs:
           channels: conda-forge,defaults
           activate-environment: LJW
 
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+
       - name: Generate a development docker image
-        if: steps.cache-build.outputs.cache-hit != 'true'
         run: |
           export CONDA_ENV=LJW
 
@@ -91,21 +111,12 @@ jobs:
           ./bootstrap.sh
 
           cd docker
-          ./build.py --no-cache --framework maxtext
-
-      - name: Log in to GHCR
-        if: steps.cache-build.outputs.cache-hit != 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          ./build.py --no-cache --framework maxtext --base-image ${{ inputs.base_image }} --stage ${{ inputs.stage }}
 
       - name: Push image to ghcr.io
-        if: steps.cache-build.outputs.cache-hit != 'true'
         run: |
-          docker tag "legate-jax-dev:maxtext" "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
-          docker push "ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext"
+          docker tag "${{ inputs.tag }}" "ghcr.io/nv-legate/legate-jax-workflows/${{ inputs.tag }}"
+          docker push "ghcr.io/nv-legate/legate-jax-workflows/${{ inputs.tag }}"
 
   test:
     needs:

@@ -35,10 +35,16 @@ parser.add_argument(
 )  # noqa: E501
 
 parser.add_argument(
+    "--base-image",
+    type=str,
+    default="maxtext_base",
+)
+
+parser.add_argument(
     "--framework",
     type=str,
-    choices=["maxtext"],
     default="maxtext",
+    choices=["maxtext"],
 )
 
 parser.add_argument(
@@ -218,6 +224,7 @@ try:
             ("CUDA_VERSION", args.cuda_version),
             ("CUDNN_VERSION", args.cudnn_version),
             ("FRAMEWORK", args.framework),
+            ("BASE_NAME", args.base_image),
         ):
             cmds.append("--build-arg")
             cmds.append(f"{arg}={value}")

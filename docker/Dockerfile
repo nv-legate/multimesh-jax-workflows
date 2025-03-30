@@ -1,6 +1,7 @@
-ARG CUDA_VERSION="12.4.1"
+ARG CUDA_VERSION="12.8.1"
 ARG CUDNN_VERSION=""
-ARG FRAMEWORK="maxtext"
+ARG BASE_NAME="maxtext_base"
+ARG JAX_PLUGIN_BASE="editable_install_zuku"
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-devel-ubuntu22.04 AS base
 
 SHELL [ "/bin/bash", "-eo", "pipefail", "-c" ]
@@ -81,12 +82,12 @@ COPY install-clang.sh /opt
 RUN /opt/install-clang.sh
 RUN ln -s /usr/bin/clangd-17 /usr/bin/clangd
 
-FROM install_clang AS maxtext_install
+FROM install_clang AS maxtext_base
 COPY maxtext /opt/maxtext
 RUN conda run -n legere python -m pip install flit-core
 RUN cd /opt/maxtext && conda run -n legere python -m pip install -e . --no-build-isolation --force-reinstall
 
-FROM ${FRAMEWORK}_install AS copy_scripts
+FROM ${BASE_NAME} AS copy_scripts
 COPY \
    configure-realm.sh build-realm.sh install-realm.sh \
    configure-zuku.sh build-zuku.sh \
@@ -133,12 +134,7 @@ RUN --mount=type=cache,target=/ccache/zuku \
     --mount=type=cache,from=build_zuku,source=${BUILD_BASE_DIR}/zuku,target=${BUILD_BASE_DIR}/zuku \
   /opt/build-zuku.sh ${BUILD_BASE_DIR}/zuku
 
-FROM editable_install_zuku AS setup_xla
-ENV PATH=$PATH:/opt/bazel
-COPY workspace/xla /opt/workspace/xla
-RUN /opt/configure-xla.sh
-
-FROM editable_install_zuku AS setup_jax_plugin
+FROM ${JAX_PLUGIN_BASE} AS setup_jax_plugin
 COPY workspace/legate-jax /opt/workspace/legate-jax
 COPY workspace/xla /opt/workspace/xla
 ARG BAZEL_CACHE=grpc://host.docker.internal:9092
