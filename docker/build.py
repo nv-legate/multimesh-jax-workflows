@@ -122,7 +122,7 @@ parser.add_argument(
 parser.add_argument(
     "--cuda-version",
     type=str,
-    default="12.4.1",
+    default="12.8.1",
     help="The CUDA version to use for the base CUDA image",
 )
 

@@ -15,6 +15,8 @@ export CCACHE_DIR=/jax-plugin-ccache
 mkdir -p /opt/lib/legate-jax
 
 conda run --no-capture-out -n legere cmake -S . -B ${BUILD_DIR} \
+  -DLegateJAX_RAPIDS_DIR=/opt/rapids-cmake \
+  -DCPM_DOWNLOAD_LOCATION=/opt/cpm/cmake/CPM.cmake \
   -DCMAKE_GENERATOR:STRING="Unix Makefiles" \
   -DCMAKE_CXX_COMPILER:PATH=/usr/bin/g++ -DCMAKE_C_COMPILER:PATH=/usr/bin/gcc \
   -DCMAKE_BUILD_TYPE:STRING="${LEGATE_BUILD_TYPE}" \

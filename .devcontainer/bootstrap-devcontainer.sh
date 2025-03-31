@@ -12,6 +12,3 @@ for folder in "xla" "legate-jax" "jax" "realm" "zuku"; do
   popd
 done
 
-pushd $topdir/docker
-./apply-patches.sh
-popd

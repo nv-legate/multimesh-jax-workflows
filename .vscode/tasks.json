@@ -93,14 +93,14 @@
             "group": "build",
             "command": "./build.py",
             "options": {
-              "cwd": "${workspaceFolder}/docker",
+              "cwd": "${workspaceFolder}/workspaces/${input:workspace_folder}/docker",
               "env": {}
             },
             "args" : [
                 "--commit",
-                "${input:container_name}",
+                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--tag",
-                "${input:container_name}",
+                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--upload"
             ]
         },
@@ -116,9 +116,9 @@
             "args" : [
                 "${workspaceFolder}/docker/build.py",
                 "--commit",
-                "${input:container_name}",
+                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--tag",
-                "${input:container_name}",
+                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--upload",
                 "--validate",
                 "medium",
@@ -138,9 +138,9 @@
             "args" : [
                 "${workspaceFolder}/docker/build.py",
                 "--commit",
-                "${input:container_name}",
+                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--tag",
-                "${input:container_name}",
+                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--upload",
                 "--validate",
                 "medium",
@@ -160,9 +160,9 @@
             "args" : [
                 "${workspaceFolder}/docker/build.py",
                 "--commit",
-                "${input:container_name}",
+                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--tag",
-                "${input:container_name}",
+                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--upload",
                 "--validate",
                 "medium",
@@ -184,7 +184,7 @@
                 "--validate",
                 "medium",
                 "--tag",
-                "${input:container_name}",
+                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--remote",
                 "${input:remote}"
             ]
@@ -203,7 +203,7 @@
                 "--validate",
                 "medium",
                 "--tag",
-                "${input:container_name}",
+                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--remote",
                 "${input:remote}"
             ]

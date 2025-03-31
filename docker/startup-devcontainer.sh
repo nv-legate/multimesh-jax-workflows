@@ -36,11 +36,3 @@ pushd /opt/workspace/legate-jax
 /opt/install-legate-jax.sh ${BUILD_DIR}/legate-jax -e
 popd
 
-pushd /opt/workspace/jax
-/opt/build-jaxlib.sh ${BUILD_DIR}/jaxlib ${BAZEL_CACHE}
-/opt/install-jaxlib.sh ${BUILD_DIR}/jaxlib
-popd
-
-pushd /opt/workspace/jax
-python -m pip install -e . --force-reinstall --no-deps
-popd

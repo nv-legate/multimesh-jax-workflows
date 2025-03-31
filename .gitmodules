@@ -42,3 +42,9 @@
 	path = docker/ucc
 	url = https://github.com/openucx/ucc.git
   shallow = true
+[submodule "docker/rapids-cmake"]
+	path = docker/rapids-cmake
+	url = https://github.com/rapidsai/rapids-cmake.git
+[submodule "docker/cpm"]
+	path = docker/cpm
+	url = https://github.com/cpm-cmake/CPM.cmake.git

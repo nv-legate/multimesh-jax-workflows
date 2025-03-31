@@ -87,26 +87,45 @@ COPY maxtext /opt/maxtext
 RUN conda run -n legere python -m pip install flit-core
 RUN cd /opt/maxtext && conda run -n legere python -m pip install -e . --no-build-isolation --force-reinstall
 
-FROM ${BASE_NAME} AS copy_scripts
+FROM ${BASE_NAME} AS setup_devcontainer_build
+ARG BUILD_BASE_DIR=/opt/build
+ARG LIB_DIR=/opt/lib
+ARG BAZEL_CACHE=grpc://host.docker.internal:9092
+COPY build-jaxlib.sh install-jaxlib.sh /opt
+
+FROM setup_devcontainer_build AS build_custom_jaxlib
+COPY workspace/xla /opt/workspace/xla
+COPY workspace/jax /opt/workspace/jax
+RUN /opt/build-jaxlib.sh ${BUILD_BASE_DIR}/jaxlib ${BAZEL_CACHE}
+
+FROM setup_devcontainer_build AS install_custom_jaxlib
+RUN conda run -n legere python -m pip uninstall -y jaxlib
+RUN --mount=type=cache,from=build_custom_jaxlib,source=${BUILD_BASE_DIR}/jaxlib,target=${BUILD_BASE_DIR}/jaxlib \
+  /opt/install-jaxlib.sh ${BUILD_BASE_DIR}/jaxlib
+
+FROM install_custom_jaxlib AS reinstall_custom_jax
+RUN conda run -n legere python -m pip uninstall -y jax
+RUN --mount=type=cache,from=build_custom_jaxlib,source=/opt/workspace/jax,target=/opt/workspace/jax \
+  cd /opt/workspace/jax && \
+  conda run --no-capture-out -n legere python -m pip install . --force-reinstall --no-deps
+
+# rename the stage
+FROM reinstall_custom_jax AS devcontainer_base
+COPY rapids-cmake /opt/rapids-cmake
+COPY cpm /opt/cpm
 COPY \
    configure-realm.sh build-realm.sh install-realm.sh \
    configure-zuku.sh build-zuku.sh \
    configure-xla.sh xla-compile-commands.sh \
-   build-jaxlib.sh install-jaxlib.sh \
    configure-legate-jax.sh build-legate-jax.sh install-legate-jax.sh \
+   startup-devcontainer.sh \
    /opt
-
-FROM copy_scripts AS devcontainer_base
-ARG BUILD_BASE_DIR=/opt/build
-ARG LIB_DIR=/opt/lib
-COPY startup-devcontainer.sh /opt
 
 FROM devcontainer_base AS setup_realm
 ARG LEGATE_BUILD_TYPE=Release
 COPY workspace/realm /opt/workspace/realm
 RUN --mount=type=cache,target=/ccache/realm \
   /opt/configure-realm.sh ${LEGATE_BUILD_TYPE} ${BUILD_BASE_DIR}/realm ${LIB_DIR}
-
 
 FROM setup_realm AS build_realm
 RUN --mount=type=cache,target=/ccache/realm \
@@ -137,7 +156,6 @@ RUN --mount=type=cache,target=/ccache/zuku \
 FROM ${JAX_PLUGIN_BASE} AS setup_jax_plugin
 COPY workspace/legate-jax /opt/workspace/legate-jax
 COPY workspace/xla /opt/workspace/xla
-ARG BAZEL_CACHE=grpc://host.docker.internal:9092
 RUN /opt/configure-xla.sh \
     && /opt/configure-legate-jax.sh ${LEGATE_BUILD_TYPE} ${BUILD_BASE_DIR}/legate-jax ${BUILD_BASE_DIR}/realm ${BUILD_BASE_DIR}/zuku ${LIB_DIR} ${BAZEL_CACHE}
 
@@ -153,22 +171,6 @@ RUN --mount=type=cache,from=build_jax_plugin,source=${BUILD_BASE_DIR}/legate-jax
   --mount=type=cache,from=build_jax_plugin,source=/root/.cache/bazel,target=/root/.cache/bazel \
     /opt/build-legate-jax.sh ${BUILD_BASE_DIR}/legate-jax \
     && /opt/install-legate-jax.sh ${BUILD_BASE_DIR}/legate-jax -e .
-
-FROM editable_install_jax_plugin AS build_custom_jaxlib
-COPY workspace/xla /opt/workspace/xla
-COPY workspace/jax /opt/workspace/jax
-RUN /opt/build-jaxlib.sh ${BUILD_BASE_DIR}/jaxlib ${BAZEL_CACHE}
-
-FROM editable_install_jax_plugin AS install_custom_jaxlib
-RUN conda run -n legere python -m pip uninstall -y jaxlib
-RUN --mount=type=cache,from=build_custom_jaxlib,source=${BUILD_BASE_DIR}/jaxlib,target=${BUILD_BASE_DIR}/jaxlib \
-  /opt/install-jaxlib.sh ${BUILD_BASE_DIR}/jaxlib
-
-FROM install_custom_jaxlib AS reinstall_custom_jax
-RUN conda run -n legere python -m pip uninstall -y jax
-RUN --mount=type=cache,from=build_custom_jaxlib,source=/opt/workspace/jax,target=/opt/workspace/jax \
-  cd /opt/workspace/jax && \
-  conda run --no-capture-out -n legere python -m pip install . --force-reinstall --no-deps
 
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]

@@ -12,6 +12,8 @@ LIB_DIR=$4
 
 conda run --no-capture-out -n legere \
   cmake -S . -B ${BUILD_DIR} \
+  -Dzuku_RAPIDS_DIR=/opt/rapids-cmake \
+  -DCPM_DOWNLOAD_LOCATION=/opt/cpm/cmake/CPM.cmake \
   -DCMAKE_GENERATOR:STRING=Ninja \
   -DCMAKE_CXX_COMPILER:PATH=/usr/bin/g++ -DCMAKE_C_COMPILER:PATH=/usr/bin/gcc \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
