@@ -412,6 +412,36 @@ maxtext.add_argument(
     help="Whether to wrap repeated layers in a while-loop (True) or unroll (False)",  # noqa: E501
 )
 
+
+maxtext.add_argument(
+    "--use-tfds-dataset",
+    dest="use_tfds_dataset",
+    default=False,
+    action=argparse.BooleanOptionalAction,
+    help="Whether to use a TFDS dataset (True) or synthetic dataset (False)",
+)
+
+maxtext.add_argument(
+    "--tokenizer-path",
+    dest="tokenizer_path",
+    default=None,
+    help="Path to tokenizer file",
+)
+
+maxtext.add_argument(
+    "--dataset-path",
+    dest="dataset_path",
+    default=None,
+    help="Path to tfds dataset",
+)
+
+maxtext.add_argument(
+    "--dataset-name",
+    dest="dataset_name",
+    default=None,
+    help="Name of TFDS dataset to use",
+)
+
 ############################################
 args, realm_argv = parser.parse_known_args()
 
@@ -539,7 +569,7 @@ if existing_xla_flags := os.environ.get("XLA_FLAGS", None):
 
 env["XLA_FLAGS"] = " ".join(xla_flags)
 
-# valiate parallelism / device count
+# validate parallelism / device count
 num_nodes = args.nodes or 1
 total_parallelism = args.tp * args.pp * args.dp * args.fsdp
 if args.gpus == 0:
@@ -755,7 +785,6 @@ argv = [
     str(config),
     "run_name=my_name",
     f"base_output_directory={os.getcwd()}/logs",
-    "dataset_type=synthetic",
     "enable_single_controller=False",
     "enable_checkpointing=False",
     f"scan_layers={args.scan_layers}",
@@ -789,6 +818,20 @@ if args.num_heads is not None:
     argv.append(f"base_num_kv_heads={args.num_heads}")
     dims_per_head = args.model_dims // args.num_heads
     argv.append(f"head_dim={dims_per_head}")
+
+if args.use_tfds_dataset:
+    if args.dataset_path and args.dataset_name and args.tokenizer_path:
+        argv.append("dataset_type=tfds")
+        argv.append(f"dataset_path={args.dataset_path}")
+        argv.append(f"dataset_name={args.dataset_name}")
+        argv.append(f"tokenizer_path={args.tokenizer_path}")
+    else:
+        raise ValueError(
+            "If --use-tfds-dataset is enabled, must define "
+            "--tokenizer-path, --dataset-path, and --dataset-name"
+        )
+else:
+    argv.append("dataset_type=synthetic")
 
 argv.append(f"hardware={hardware}")
 
