@@ -571,6 +571,15 @@ if args.num_layers is None:
             "please specify --num-layers for configuring pipeline parallelism with --pp > 1"
         )
 else:
+    if args.num_layers % num_stages != 0:
+        if args.num_layers < num_stages:
+            error_str = f"Number of layers ({args.num_layers}) must be >= " \
+                        f"product of pp ({args.pp}) and interleave ({args.interleave})"
+        else:
+            error_str = f"Number of layers ({args.num_layers}) must be divisible " \
+                        f"by pp ({args.pp}) and interleave ({args.interleave})"
+        raise ValueError(error_str)
+
     base_num_decoder_layers = args.num_layers
     layers_per_stage = base_num_decoder_layers // num_stages
     layers_per_interleave = base_num_decoder_layers // args.interleave
