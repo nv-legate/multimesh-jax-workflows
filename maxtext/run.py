@@ -566,9 +566,9 @@ if args.num_layers is None:
     base_num_decoder_layers = None
     layers_per_stage = None
     layers_per_interleave = None
-    if args.pp > 1:
+    if args.pp > 1 or batch_size != global_mb_size:
         raise Exception(
-            "please specify --num-layers for configuring pipeline parallelism with --pp > 1"
+            "please specify --num-layers for configuring pipeline parallelism with --pp > 1 or microbatching"
         )
 else:
     if args.num_layers % num_stages != 0:
