@@ -519,7 +519,7 @@ index 424e170c..e8730c6b 100644
      if raw_keys["dataset_type"] == "c4_mlperf":
        raw_keys["add_bos"] = False
 diff --git a/MaxText/train.py b/MaxText/train.py
-index 08cbd560..451a08c8 100644
+index 08cbd560..e38c9d3a 100644
 --- a/MaxText/train.py
 +++ b/MaxText/train.py
 @@ -27,7 +27,8 @@ import functools
@@ -548,19 +548,36 @@ index 08cbd560..451a08c8 100644
  def save_checkpoint(
      checkpoint_manager,
      step,
-@@ -372,9 +373,12 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
+@@ -332,7 +333,7 @@ def dpo_loss_fn(model, config, data, dropout_rng, params, reference_params, is_t
+   return loss, aux
+ 
+ 
+-def loss_fn(model, config, data, dropout_rng, params, is_train=True):
++def loss_fn(model, config, data, dropout_rng, params, total_weights=None, is_train=True):
+   """loss_fn for both train and eval.
+ 
+   Args:
+@@ -341,6 +342,7 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
+     data: Batch of data to apply to the model
+     dropout_rng: A key to use to generate rng for dropout
+     params: Model params
++    total_weights: number of non-padding tokens in the entire batch
+     is_train: True for train_step and False for eval_step
+ 
+   Returns:
+@@ -371,10 +373,12 @@ def loss_fn(model, config, data, dropout_rng, params, is_train=True):
+   xent, _ = max_utils.cross_entropy_with_logits(logits, one_hot_targets, 0.0)
    xent = nn.with_logical_constraint(xent, ("activation_embed_and_logits_batch", "activation_length"))
    # Mask out paddings at the end of each example.
-   xent = xent * (data["targets_segmentation"] != 0)
--  total_loss = jnp.sum(xent)
+-  xent = xent * (data["targets_segmentation"] != 0)
++  weights = data["targets_segmentation"] != 0
++  xent = xent * weights
++  if total_weights is None:
++    total_weights = jnp.sum(weights)
+   total_loss = jnp.sum(xent)
 -  total_weights = jnp.sum(data["targets_segmentation"] != 0)
 -  loss = total_loss / (total_weights + EPS)
-+  per_batch_xent = jnp.sum(xent, axis=-1)
-+  per_batch_weights = jnp.sum(data["targets_segmentation"] != 0, axis=-1)
-+  per_batch_loss = per_batch_xent / (per_batch_weights + EPS)
-+  total_loss = jnp.sum(per_batch_xent)
-+  total_weights = jnp.sum(per_batch_weights)
-+  loss = jnp.sum(per_batch_loss)
++  loss = jnp.sum(xent / (total_weights + EPS))
    # get moe load balance loss
    moe_lb_loss = 0.0
    if config.num_experts > 1:
@@ -585,13 +602,14 @@ index 08cbd560..451a08c8 100644
  def train_step(model, config, state_mesh_shardings, state, data, dropout_rng):
    """
  
-@@ -456,6 +474,28 @@ def train_step(model, config, state_mesh_shardings, state, data, dropout_rng):
+@@ -455,7 +473,29 @@ def train_step(model, config, state_mesh_shardings, state, data, dropout_rng):
+         reference_params = jax.device_put(reference_params, max_utils.with_memory_kind(reference_params_sharding, "device"))
          extra_dpo_args = [reference_params]
      grad_func = jax.value_and_grad(_loss_fn, argnums=4, has_aux=True)
-     (loss, aux), raw_grads = grad_func(model, config, data, dropout_rng, state.params, *extra_dpo_args, is_train=True)
+-    (loss, aux), raw_grads = grad_func(model, config, data, dropout_rng, state.params, *extra_dpo_args, is_train=True)
 +
 +    if microbatch_config.size is None or microbatch_config.size == config.global_batch_size_to_train_on:
-+      (loss, aux), raw_grads = grad_func(model, config, data, dropout_rng, state.params, **extra_dpo_args, is_train=True)
++      (loss, aux), raw_grads = grad_func(model, config, data, dropout_rng, state.params, *extra_dpo_args, is_train=True)
 +    else:
 +      from legate.jax import microbatch
 +
@@ -599,9 +617,10 @@ index 08cbd560..451a08c8 100644
 +        return None
 +
 +      arg_shardings = jax.tree_map(microbatch_input_sharding, data)
++      total_weights = jnp.sum(data["targets_segmentation"] != 0)
 +
 +      def mb_grad_func(data, dropout, params):
-+        return grad_func(model, config, data, dropout, params, is_train=True)
++        return grad_func(model, config, data, dropout, params, total_weights=total_weights, is_train=True)
 +
 +      mb_grad_func = microbatch(mb_grad_func, dim=0, argnum=0,
 +                             size=microbatch_config.size, arg_shardings=arg_shardings,
@@ -615,7 +634,7 @@ index 08cbd560..451a08c8 100644
    total_weights = aux["total_weights"]
    moe_lb_loss = aux["moe_lb_loss"]
 @@ -475,15 +515,19 @@ def train_step(model, config, state_mesh_shardings, state, data, dropout_rng):
-
+ 
    scalar_metrics = {
        "learning/loss": loss,
 -      "learning/moe_lb_loss": moe_lb_loss,
@@ -650,12 +669,12 @@ index 08cbd560..451a08c8 100644
 +  #if not config.using_pipeline_parallelism:
 +  #  # The vocab tensor(s) of shape [vocab, embed] (and transpose) are not sharded by stage
 +  #  maxtext_utils.assert_params_sufficiently_sharded(state.params, mesh, config.sharding_tolerance)
-
+ 
    if config.use_dpo:
      abstract_state, _, _ = max_utils.get_abstract_state(model, tx, config, init_rng, mesh, is_training=True)
 @@ -682,7 +726,21 @@ def setup_train_loop(config):
        )
-
+ 
    record_goodput(recorder, config, recorder.record_training_preparation_end_time if recorder else None)
 +
 +  # Shaped RNG keys
@@ -699,7 +718,7 @@ index 08cbd560..451a08c8 100644
 -      state,
 +      shaped_train_args,
    ) = setup_train_loop(config)
-
+ 
    if config.use_dpo:
 @@ -734,7 +793,8 @@ def train_loop(config, state=None):
        out_shard_train,
