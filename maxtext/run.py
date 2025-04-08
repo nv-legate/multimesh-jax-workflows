@@ -148,7 +148,7 @@ xla.add_argument(
 )
 
 
-# XLA parameters
+# Legate-Jax parameters
 ####################################################
 legate_jax = parser.add_argument_group("Legate-Jax")
 legate_jax.add_argument(
@@ -287,6 +287,8 @@ legate_jax.add_argument(
     help="Whether to rotate microbatches across different submeshes for load-balancing",  # noqa: E501
 )
 
+# Maxtext parameters
+####################################################
 maxtext = parser.add_argument_group("MaxText")
 
 maxtext.add_argument(
@@ -509,6 +511,9 @@ env = dict(
     TF_CPP_VMODULE=vmodule_str,
     JAX_TRACEBACK_FILTERING="off",
     JAX_COMPILER_DETAILED_LOGGING_MIN_OPS=0,
+    ENABLE_TE=1,
+    ENABLE_TE_SP=1,
+    NVTE_FUSED_ATTN=1,
     LD_LIBRARY_PATH=f"{LD_LIBRARY_PATH}:/usr/local/cuda/lib64",
 )
 
