@@ -8,6 +8,22 @@ To do so, run the `./bootstrap.sh` script in the top folder.
 We recommend using the [build driver script](docker/build.py).
 For a full list of options, one can run `build.py --help`.
 
+The most common build option will be:
+
+```
+./build.py --tag <TAG> --upload --repo <REPO>
+```
+
+which builds an image named `<REPO>:<TAG>` and uploads it,
+assuming that `<REPO>` points to a valid container registry.
+
+## MaxText Configs
+
+The main framework integrated with Legate-Jax is [MaxText](https://github.com/AI-Hypercomputer/maxtext).
+A default Docker build will produce an image with a MaxText
+installation. Please see [the README](maxtext/README.md) for
+instructions on running MaxText with the provided helper scripts.
+
 ## Devcontainer
 
 This repository is the base development project for vscode workflows.
@@ -22,15 +38,10 @@ starting a devcontainer, do the following:
 legate-jax-workflows $ conda env create -n dev-workflows -f environment.yml
 ```
 
-* Install all Python dependencies. It is recommend to use the `eos_workflows` dependency as an editable install
-that can be easily updated and debugged.
+* Install all Python dependencies.
 
 ```bash
 legate-jax-workflows $ conda activate dev-workflows
-legate-jax-workflows $ git clone ssh://git@gitlab-master.nvidia.com:12051/jwilke/eos-workflows.git
-legate-jax-workflows $ cd eos-workflows
-eos-workflows        $ python -m pip install -e .
-eos-workflows        $ cd ..
 legate-jax-workflows $ python -m pip install -r requirements.txt
 ```
 
