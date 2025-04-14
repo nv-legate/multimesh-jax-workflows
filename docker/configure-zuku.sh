@@ -14,6 +14,7 @@ conda run --no-capture-out -n legere \
   cmake -S . -B ${BUILD_DIR} \
   -Dzuku_RAPIDS_DIR=/opt/rapids-cmake \
   -DCPM_DOWNLOAD_LOCATION=/opt/cpm/cmake/CPM.cmake \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCMAKE_GENERATOR:STRING=Ninja \
   -DCMAKE_CXX_COMPILER:PATH=/usr/bin/g++ -DCMAKE_C_COMPILER:PATH=/usr/bin/gcc \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -27,5 +28,7 @@ conda run --no-capture-out -n legere \
   -DLegion_ROOT:PATH=${REALM_DIR} \
   -DCMAKE_INSTALL_RPATH:PATH=/opt/install/miniconda/envs/legere/lib \
   -DCMAKE_INSTALL_PREFIX:PATH=/opt/install/miniconda/envs/legere
+
+ln -s $BUILD_DIR/compile_commands.json
 
 popd

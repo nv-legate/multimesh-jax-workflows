@@ -16,6 +16,7 @@ mkdir -p /opt/lib/legate-jax
 
 conda run --no-capture-out -n legere cmake -S . -B ${BUILD_DIR} \
   -DLegateJAX_RAPIDS_DIR=/opt/rapids-cmake \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCPM_DOWNLOAD_LOCATION=/opt/cpm/cmake/CPM.cmake \
   -DCMAKE_GENERATOR:STRING="Unix Makefiles" \
   -DCMAKE_CXX_COMPILER:PATH=/usr/bin/g++ -DCMAKE_C_COMPILER:PATH=/usr/bin/gcc \
@@ -35,5 +36,7 @@ conda run --no-capture-out -n legere cmake -S . -B ${BUILD_DIR} \
   -DLegateJAX_ASAN:BOOL=OFF \
   -DCMAKE_INSTALL_RPATH:PATH=/opt/install/miniconda/envs/legere/lib \
   -DCMAKE_INSTALL_PREFIX:PATH=/opt/install/miniconda/envs/legere
+
+ln -s $BUILD_DIR/compile_commands.json
 
 popd
