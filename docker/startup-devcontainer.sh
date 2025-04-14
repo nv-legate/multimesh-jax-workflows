@@ -27,7 +27,6 @@ popd
 
 pushd /opt/workspace/xla
 /opt/configure-xla.sh
-/opt/xla-compile-commands.sh
 popd
 
 pushd /opt/workspace/legate-jax
@@ -36,3 +35,6 @@ pushd /opt/workspace/legate-jax
 /opt/install-legate-jax.sh ${BUILD_DIR}/legate-jax -e
 popd
 
+pushd /opt/workspace/xla
+/opt/xla-compile-commands.sh
+popd
