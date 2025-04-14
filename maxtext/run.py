@@ -280,13 +280,6 @@ legate_jax.add_argument(
     help="Replicate all smaller than batch*squence_length",
 )
 
-legate_jax.add_argument(
-    "--load-balance-embeddings",
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help="Whether to rotate microbatches across different submeshes for load-balancing",  # noqa: E501
-)
-
 # Maxtext parameters
 ####################################################
 maxtext = parser.add_argument_group("MaxText")
@@ -699,12 +692,7 @@ if args.backend == "legate":
         transformer_z_dim,
     ]
 
-    if args.load_balance_embeddings:
-        loop_dependent_submesh_size = transformer_num_devices
-        num_devices_for_all_loops = total_devices
-    else:
-        loop_dependent_submesh_size = None
-        num_devices_for_all_loops = transformer_num_devices
+    num_devices_for_all_loops = transformer_num_devices
 
     # register tasks
     import train
@@ -741,39 +729,13 @@ if args.backend == "legate":
             logical_axes=transformer_axes,
         )
 
-        first_layer_devices = devices[:num_devices_for_all_loops]
-        last_layer_devices = devices[-num_devices_for_all_loops:]
-
-        layer_meshes = {
-            "(emb).*": (
-                first_layer_devices,
-                loop_dependent_submesh_size,
-            ),
-            "(decoder_norm).*": (
-                last_layer_devices,
-                loop_dependent_submesh_size,
-            ),
-            "(compute_loss).*": (
-                last_layer_devices,
-                loop_dependent_submesh_size,
-            ),
-            "(final_ln).*": (
-                last_layer_devices,
-                loop_dependent_submesh_size,
-            ),
-            "default": (devices[:transformer_num_devices], None),
-        }
-
-        for layer, (devices, loop_submesh_size) in layer_meshes.items():
-            register_task(
-                layer,
-                devices=devices,
-                dims=transformer_mesh,
-                device_axes=["x", "y", "z"],
-                logical_axes=transformer_axes,
-                loop_submesh_size=loop_submesh_size,
-                loop_submesh_reverse=False,
-            )
+        register_task(
+            "default",
+            devices=devices[:transformer_num_devices],
+            dims=transformer_mesh,
+            device_axes=["x", "y", "z"],
+            logical_axes=transformer_axes,
+        )
 
 import maxtext_utils as mu  # noqa: E402 must come after legate init
 
@@ -903,7 +865,6 @@ if args.compile_topology_num_slices:
 # always enable recomputation
 with legate.jax.context(
     enable_recomputation=True,
-    host_offload_min_reuse_distance=args.host_offload_min_reuse_distance,
     only_fuse_loop_tasks=args.only_fuse_loop_tasks,
     enable_task_fusion=args.fuse_tasks,
 ):
