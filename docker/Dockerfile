@@ -170,7 +170,7 @@ RUN --mount=type=cache,from=build_jax_plugin,source=${BUILD_BASE_DIR}/legate-jax
   --mount=type=cache,from=build_jax_plugin,source=/opt/workspace/xla,target=/opt/workspace/xla \
   --mount=type=cache,from=build_jax_plugin,source=/root/.cache/bazel,target=/root/.cache/bazel \
     /opt/build-legate-jax.sh ${BUILD_BASE_DIR}/legate-jax \
-    && /opt/install-legate-jax.sh ${BUILD_BASE_DIR}/legate-jax -e .
+    && /opt/install-legate-jax.sh ${BUILD_BASE_DIR}/legate-jax .
 
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]
