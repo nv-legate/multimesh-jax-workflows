@@ -711,27 +711,23 @@ if args.backend == "legate":
         train.set_mb_config(global_mb_size, args.schedule, num_stages, args.interleave)
         layer_regex = re.compile(r"layers_(\d+)")
 
-        def compute_devices(name: str):
+        def compute_devices(name: str, backprop: bool):
             layer = int(layer_regex.search(name).groups()[0])
+            pipeline_stage = layer // layers_per_stage
             if layers_per_interleave is not None:
                 # layer offset within an interleave
-                layer = layer % layers_per_interleave
-            stage = layer // layers_per_stage
-            offset = transformer_num_devices * stage
+                mesh = (layer % layers_per_interleave) // layers_per_stage
+            else:
+                mesh = pipeline_stage
+            offset = transformer_num_devices * mesh
             stop = offset + transformer_num_devices
-            return list(range(offset, stop))
+            suffix = "bwd" if backprop else "fwd"
+            color = f"stage_{pipeline_stage}_{suffix}"
+            return (offset, stop), color
 
         register_task(
             r"(layers_\d+)",
             callback=compute_devices,
-            dims=transformer_mesh,
-            device_axes=["x", "y", "z"],
-            logical_axes=transformer_axes,
-        )
-
-        register_task(
-            "default",
-            devices=devices[:transformer_num_devices],
             dims=transformer_mesh,
             device_axes=["x", "y", "z"],
             logical_axes=transformer_axes,
