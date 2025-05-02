@@ -35,5 +35,5 @@ python ./run.py \
    --dump dump \
    --dump-mpmd-passes \
    --autoshard \
-   --backend legate \
+   --backend multimesh \
    --debug info

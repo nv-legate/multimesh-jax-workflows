@@ -1,7 +1,7 @@
 {
   "folders": [
     {
-      "path": "legate-jax",
+      "path": "multimesh-jax",
     },
     {
       "path": "xla",
@@ -17,12 +17,12 @@
     "version": "2.0.0",
     "tasks": [
        {
-        "label": "Compile Legate-Jax",
+        "label": "Compile MultiMesh-Jax",
         "type": "shell",
         "group": "build",
-        "command": "cmake --build ${workspaceFolder:legate-jax}/build",
+        "command": "cmake --build ${workspaceFolder:multimesh-jax}/build",
         "options": {
-          "cwd": "${workspaceFolder:legate-jax}",
+          "cwd": "${workspaceFolder:multimesh-jax}",
           "env": {},
         },
         "problemMatcher": {
@@ -31,20 +31,20 @@
         }
       },
       {
-        "label": "Install Legate-Jax",
+        "label": "Install MultiMesh-Jax",
         "type": "shell",
         "group": "build",
         "command": "cmake --install build",
         "options": {
-          "cwd": "${workspaceFolder:legate-jax}",
+          "cwd": "${workspaceFolder:multimesh-jax}",
           "env": {},
         },
       },
       {
-        "label": "Build Legate-Jax",
+        "label": "Build MultiMesh-Jax",
         "group": "build",
         "dependsOrder": "sequence",
-        "dependsOn": ["Compile Legate-Jax", "Install Legate-Jax"],
+        "dependsOn": ["Compile MultiMesh-Jax", "Install MultiMesh-Jax"],
       },
       {
         "label": "Run MPMD partition tests",
@@ -52,7 +52,7 @@
         "group": "test",
         "command": "ctest",
         "options": {
-          "cwd": "${workspaceFolder:legate-jax}",
+          "cwd": "${workspaceFolder:multimesh-jax}",
           "env": {},
         },
         "args" : [
@@ -70,7 +70,7 @@
         "group": "test",
         "command": "ctest",
         "options": {
-          "cwd": "${workspaceFolder:legate-jax}",
+          "cwd": "${workspaceFolder:multimesh-jax}",
           "env": {
             "CUDA_VISIBLE_DEVICES" : "0"
           },
@@ -79,7 +79,7 @@
           "--test-dir",
           "build",
           "-R",
-          "LegateExecutableTest.TransformerTwoNodesHostOffload",
+          "MultiMeshExecutableTest.TransformerTwoNodesHostOffload",
         ]
       },
       {
@@ -93,7 +93,7 @@
         "group": "test",
         "command": "${command:python.interpreterPath}",
         "options": {
-          "cwd": "${workspaceFolder:legate-jax}",
+          "cwd": "${workspaceFolder:multimesh-jax}",
         },
         "args" : [
           "tests/python/jax_microbatch_test.py",
@@ -107,7 +107,7 @@
         "group": "test",
         "command": "${command:python.interpreterPath}",
         "options": {
-          "cwd": "${workspaceFolder:legate-jax}",
+          "cwd": "${workspaceFolder:multimesh-jax}",
         },
         "args" : [
           "tests/python/jax_microbatch_test.py",
@@ -123,7 +123,7 @@
         "group": "test",
         "command": "${command:python.interpreterPath}",
         "options": {
-          "cwd": "${workspaceFolder:legate-jax}",
+          "cwd": "${workspaceFolder:multimesh-jax}",
         },
         "args" : [
           "tests/python/jax_task_test.py",
@@ -139,7 +139,7 @@
         "group": "test",
         "command": "${command:python.interpreterPath}",
         "options": {
-          "cwd": "${workspaceFolder:legate-jax}",
+          "cwd": "${workspaceFolder:multimesh-jax}",
         },
         "args" : [
           "tests/python/jax_auto_task_test.py",
@@ -155,7 +155,7 @@
         "group": "test",
         "command": "${command:python.interpreterPath}",
         "options": {
-          "cwd": "${workspaceFolder:legate-jax}",
+          "cwd": "${workspaceFolder:multimesh-jax}",
         },
         "args" : [
           "tests/python/jax_auto_task_test.py",
@@ -171,7 +171,7 @@
         "group": "test",
         "command": "${command:python.interpreterPath}",
         "options": {
-          "cwd": "${workspaceFolder:legate-jax}",
+          "cwd": "${workspaceFolder:multimesh-jax}",
         },
         "args" : [
           "tests/python/jax_auto_task_test.py",

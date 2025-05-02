@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 
 try:
-    from jax_plugins.legate import init
+    from jax_plugins.multimesh import init
 except ImportError:
     pass
 
@@ -148,41 +148,41 @@ xla.add_argument(
 )
 
 
-# Legate-Jax parameters
+# MultiMesh parameters
 ####################################################
-legate_jax = parser.add_argument_group("Legate-Jax")
-legate_jax.add_argument(
+mm_jax = parser.add_argument_group("MultiMesh-Jax")
+mm_jax.add_argument(
     "--backend",
     type=str,
-    choices=["cuda", "legate", "cpu"],
+    choices=["cuda", "multimesh", "cpu"],
     help="The JAX backend to use",
-    default="legate",
+    default="multimesh",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--autoshard",
     action=argparse.BooleanOptionalAction,
     default=True,
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--host-offload-min-reuse-distance",
     type=int,
     default=0,
     help="The minimum reuse distance to trigger host-offload of intermediates. 0 indicates no offloading",  # noqa: E501
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--debug",
     type=str,
     default=None,
     choices=["none", "info", "debug", "spew"],
     help="The debug level",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--only-fuse-loop-tasks",
     action=argparse.BooleanOptionalAction,
     default=False,
     help="Only fuse tasks inside loops",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--fuse-tasks",
     action=argparse.BooleanOptionalAction,
     default=True,
@@ -194,86 +194,86 @@ xla_debug_levels = {
     "debug": 3,
     "spew": 5,
 }
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--pp",
     type=int,
     default=1,
     help="The degree of pipeline parallelism",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--tp",
     type=int,
     default=1,
     help="The degree of tensor parallelism",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--fsdp",
     type=int,
     default=1,
     help="The degree of fully-sharded data parallelism",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--dp",
     type=int,
     default=1,
     help="The degree of data parallelism",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--interleave",
     type=int,
     default=1,
     help="The amount of interleaving (circular scheduling)",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--sequence-parallel",
     action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to use sequence parallelism",  # noqa: E501
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--schedule",
     type=str,
     choices=["fill-drain", "gpipe", "1f1b", "wavefront", "prefetch-wavefront"],
     help="The microbatch schedule to use",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--microbatch-size",
     type=int,
     default=None,
     help="The size of the per-node microbatch to use. This is microbatch size per tensor-parallel domain, independent of data parallelism or FSDP. Default is to match the global batch size",  # noqa: E501
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--hlo",
     type=str,
     default=None,
     help="Path to an HLO module to compile. This starts an HLO module compilation test rather than a full PaxML run",  # noqa: E501
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--dump-only",
     action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to only dump HLO modules without full execution",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--dump",
     type=str,
     default=None,
     help="A folder for dumping the HLO modules",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--dump-mpmd-passes",
     action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to dump all intermediate HLO modules from the MPMD passes",
 )
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--dump-all-passes",
     action=argparse.BooleanOptionalAction,
     default=False,
     help="Whether to dump all intermediate HLO modules",
 )
 
-legate_jax.add_argument(
+mm_jax.add_argument(
     "--replicate-small-params",
     action=argparse.BooleanOptionalAction,
     default=True,
@@ -473,14 +473,14 @@ if args.dump_only:
 # setup environment variables
 #############################
 vmodule = [
-    "legate_pjrt_buffer",
+    "mm_pjrt_buffer",
     "hlo_partition",
-    "legate_computation",
-    "legate_pjrt_client",
-    "legate_pjrt_executable",
+    "mm_computation",
+    "mm_pjrt_client",
+    "mm_pjrt_executable",
     "mpmd_input_output_buffer_alias",
     "loop_scheduler",
-    "legate_ifrt_client",
+    "mm_ifrt_client",
     "hlo_memory_scheduler",
 ]
 
@@ -510,7 +510,7 @@ env = dict(
     LD_LIBRARY_PATH=f"{LD_LIBRARY_PATH}:/usr/local/cuda/lib64",
 )
 
-if args.backend == "legate":
+if args.backend == "multimesh":
     env["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 xla_flags = [
@@ -533,7 +533,7 @@ xla_flags = [
 
 
 # these come from the nvidia JAX toolbox benchmarks
-if args.backend == "legate":
+if args.backend == "multimesh":
     xla_flags.append("--xla_gpu_enable_highest_priority_async_stream=true")
 
 if args.collective_matmul is not None:
@@ -546,7 +546,7 @@ if args.collective_matmul is not None:
     )
 
 if args.hoist_loop_convert:
-    os.environ["LEGATE_XLA_HOIST_CONVERT"] = "1"
+    os.environ["MULTIMESH_HOIST_CONVERT"] = "1"
 
 if args.dump_only and args.dump is None:
     raise ValueError("--dump-only requsted, but no older passed to --dump")
@@ -646,10 +646,10 @@ for key, val in env.items():
 
 sys.path.append("/opt/maxtext/MaxText/")
 
-import legate.jax  # noqa: E402
+import multimesh.jax  # noqa: E402
 
-# initialize legate.jax
-if args.backend == "legate":
+# initialize multimesh.jax
+if args.backend == "multimesh":
     init(
         cpus=args.cpus,
         gpus=args.gpus,
@@ -696,7 +696,7 @@ if args.backend == "legate":
 
     # register tasks
     import train
-    from legate.jax import register_task
+    from multimesh.jax import register_task
 
     if args.pp == 1 and global_mb_size == batch_size:
         # just default transformer parallelism
@@ -733,7 +733,7 @@ if args.backend == "legate":
             logical_axes=transformer_axes,
         )
 
-import maxtext_utils as mu  # noqa: E402 must come after legate init
+import maxtext_utils as mu  # noqa: E402 must come after multimesh init
 
 maxtext_base = Path(mu.__file__).parent
 
@@ -859,7 +859,7 @@ if args.compile_topology_num_slices:
 
 
 # always enable recomputation
-with legate.jax.context(
+with multimesh.jax.context(
     enable_recomputation=True,
     only_fuse_loop_tasks=args.only_fuse_loop_tasks,
     enable_task_fusion=args.fuse_tasks,
@@ -870,7 +870,7 @@ with legate.jax.context(
                 "cannot set small parameter replication threshold without --sequence-length"  # noqa: E501
             )
 
-        legate.jax.replicate_parameters_smaller_than_num_elements(
+        multimesh.jax.replicate_parameters_smaller_than_num_elements(
             batch_size * args.sequence_length
         )
 
@@ -901,7 +901,7 @@ with legate.jax.context(
 
     else:
         platform = "gpu" if args.gpus else "cpu"
-        legate.jax.compile_hlo_module(
+        multimesh.jax.compile_hlo_module(
             args.hlo,
             num_partitions=total_devices,
             erase_sharding=args.erase_explicit_sharding,

@@ -11,6 +11,6 @@ jobs:
     uses: ./.github/workflows/base-workflow.yml
     with:
       tag: maxtext
-      base_image: ghcr.io/nv-legate/legate-jax-dev:devcontainer_base
+      base_image: ghcr.io/nv-legate/multimesh-jax-dev:devcontainer_base
       stage: reinstall_custom_jax
     secrets: inherit

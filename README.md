@@ -1,4 +1,4 @@
-# Jax Workflows
+# MultiMesh for Jax Workflows
 
 ## Docker Builds
 
@@ -19,7 +19,7 @@ assuming that `<REPO>` points to a valid container registry.
 
 ## MaxText Configs
 
-The main framework integrated with Legate-Jax is [MaxText](https://github.com/AI-Hypercomputer/maxtext).
+The main framework integrated with MultiMesh for Jax is [MaxText](https://github.com/AI-Hypercomputer/maxtext).
 A default Docker build will produce an image with a MaxText
 installation. Please see [the README](maxtext/README.md) for
 instructions on running MaxText with the provided helper scripts.
@@ -35,14 +35,14 @@ starting a devcontainer, do the following:
 * Create a conda environment, e.g. `dev-workflows` from the provided environment file on your development machine
 
 ```bash
-legate-jax-workflows $ conda env create -n dev-workflows -f environment.yml
+multimesh-jax-workflows $ conda env create -n dev-workflows -f environment.yml
 ```
 
 * Install all Python dependencies.
 
 ```bash
-legate-jax-workflows $ conda activate dev-workflows
-legate-jax-workflows $ python -m pip install -r requirements.txt
+multimesh-jax-workflows $ conda activate dev-workflows
+multimesh-jax-workflows $ python -m pip install -r requirements.txt
 ```
 
 * Create a conda environment from `environment.yml` on all remote machines you want to use for testing
@@ -78,7 +78,7 @@ containers. There may be an initial warmup in the first devcontainer, but
 subsequent builds should be quick.  It should be sufficient to run:
 
 ```bash
-legate-jax-workflows/docker $ ./start-cache.sh
+multimesh-jax-workflows/docker $ ./start-cache.sh
 ```
 
 ### clangd and compile_comands.json for XLA
@@ -97,7 +97,7 @@ or upload/run tasks run *on* the image/container.
 
 The main tasks inside the container are build and test tasks:
 
-* Build legate-jax plugin
+* Build multimesh-jax plugin
 * Run XLA smoke tests to test XLA changes
 * Run JAX unit tests to test complete stack changes
 
@@ -115,7 +115,7 @@ The main tasks outside the container are build and test tasks:
 
 ## Jax APIs documentation and tutorials
 
-Documentation on the Jax APIs can be found [here](http://sw-mobile-docs/cllr/legate-jax/).
+Documentation on the Jax APIs can be found [here](http://sw-mobile-docs/cllr/multimesh-jax/).
 
 ## Driver script for MaxText
 
@@ -123,7 +123,7 @@ A script for running [MaxText](maxtext/run.py) is included to simplify the proce
 of tuning parameters. A full list of options can be required by running:
 
 ```
-legate-jax-workflows $ maxtext/run.py --help
+multimesh-jax-workflows $ maxtext/run.py --help
 ```
 
 There are several options for configuring the parallelism:
@@ -165,7 +165,7 @@ docker run \
   --mount type=bind,source="$(pwd)"/maxtext,target=/workspace \
   -w /workspace \
   --gpus 2 \
-  gitlab-master.nvidia.com:5005/legate/quickstart.internal/legate-jax-dev:maxtext \
+  gitlab-master.nvidia.com:5005/legate/quickstart.internal/multimesh-jax-dev:maxtext \
   ./validate-gpu.sh
 ```
 
@@ -184,7 +184,7 @@ docker run \
   --mount type=bind,source="$(pwd)"/maxtext,target=/workspace \
   -w /workspace \
   --gpus 2 \
-  gitlab-master.nvidia.com:5005/legate/quickstart.internal/legate-jax-dev:maxtext \
+  gitlab-master.nvidia.com:5005/legate/quickstart.internal/multimesh-jax-dev:maxtext \
   ./validate-cpu.sh
 ```
 

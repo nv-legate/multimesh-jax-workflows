@@ -9,7 +9,7 @@ managed as Git submodules. To run the submodule updates and apply patch files,
 run the `bootstrap.sh` in the top-level directory:
 
 ```bash
-legate-jax-workflows $ ./bootstrap.sh
+multimesh-jax-workflows $ ./bootstrap.sh
 ```
 
 Some of the repos are private to Nvidia and expect an SSH key to have been configured.
@@ -22,7 +22,7 @@ rebuild an image with updates to any of the repos, it is highly recommended to s
 It should be sufficient to run:
 
 ```bash
-legate-jax-workflows/docker $ ./start-cache.sh
+multimesh-jax-workflows/docker $ ./start-cache.sh
 ```
 
 This downloads and starts a Docker container with the remote cache running on gRPC port 9092.
@@ -41,10 +41,10 @@ There is a `./build.py` script that starts a docker build with the correct
 arguments for mapping the remote cache on the host network into the container.
 
 ```
-legate-jax-workflows/docker $ ./build.py --framework maxtext
+multimesh-jax-workflows/docker $ ./build.py --framework maxtext
 ```
 
-This will produce an image named `legate-jax-dev:maxtext` that can be tagged and pushed where needed.
+This will produce an image named `multimesh-jax-dev:maxtext` that can be tagged and pushed where needed.
 The image will contain all the code from the repos and installs Python libraries in 
 editable mode and enables rebuilds of the C++ libraries. To build without the remote cache,
 use the `--no-cache` option to the build. For a full list of options see `./build.py --help`.

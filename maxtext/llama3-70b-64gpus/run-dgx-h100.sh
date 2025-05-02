@@ -61,6 +61,6 @@ python /workspace/cwd/run.py \
     --autoshard \
     --num-steps 10 \
     --debug info \
-    --backend legate \
+    --backend multimesh \
     -logfile jax_%.log \
     >& ${RANK}.out

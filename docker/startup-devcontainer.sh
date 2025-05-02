@@ -11,7 +11,7 @@ ln -s /opt/workspace /docker/workspace
 
 # git finds what I'm doing 'dubious'
 git config --global --add safe.directory /opt/workspace/xla
-git config --global --add safe.directory /opt/workspace/legate-jax
+git config --global --add safe.directory /opt/workspace/multimesh-jax
 git config --global --add safe.directory /opt/workspace/realm
 git config --global --add safe.directory /opt/workspace/zuku
 
@@ -29,12 +29,12 @@ pushd /opt/workspace/xla
 /opt/configure-xla.sh
 popd
 
-pushd /opt/workspace/legate-jax
-/opt/configure-legate-jax.sh ${BUILD_TYPE} ${BUILD_DIR}/legate-jax ${BUILD_DIR}/realm ${BUILD_DIR}/zuku ${LIB_DIR} ${BAZEL_CACHE}
-/opt/build-legate-jax.sh ${BUILD_DIR}/legate-jax
-/opt/install-legate-jax.sh ${BUILD_DIR}/legate-jax
+pushd /opt/workspace/multimesh-jax
+/opt/configure-multimesh-jax.sh ${BUILD_TYPE} ${BUILD_DIR}/multimesh-jax ${BUILD_DIR}/realm ${BUILD_DIR}/zuku ${LIB_DIR} ${BAZEL_CACHE}
+/opt/build-multimesh-jax.sh ${BUILD_DIR}/multimesh-jax
+/opt/install-multimesh-jax.sh ${BUILD_DIR}/multimesh-jax
 popd
 
 pushd /opt/workspace/xla
-/opt/xla-compile-commands.sh
+#/opt/xla-compile-commands.sh
 popd

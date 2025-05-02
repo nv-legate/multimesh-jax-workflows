@@ -341,7 +341,7 @@ index c748ea98..22de483e 100644
 +from jax.experimental.pjit import pjit, AUTO
 +
 +try:
-+  from legate.jax import MeshWrapper
++  from multimesh.jax import MeshWrapper
 +except ImportError:
 +  pass
  
@@ -432,7 +432,7 @@ index c748ea98..22de483e 100644
 +  donate_argnums = 0  # This is the index of the state - we allow the compiler to make use of this memory.
 +
 +  from jax.lax import with_sharding_constraint
-+  from legate.jax import autoshard
++  from multimesh.jax import autoshard
 +  def autoshard_train_fn(train_state, *args):
 +    sharded_train_state = jax.tree_map(lambda x, y: with_sharding_constraint(x, y), train_state, state_mesh_annotations)
 +    return functional_train(sharded_train_state, *args)
@@ -611,7 +611,7 @@ index 08cbd560..e38c9d3a 100644
 +    if microbatch_config.size is None or microbatch_config.size == config.global_batch_size_to_train_on:
 +      (loss, aux), raw_grads = grad_func(model, config, data, dropout_rng, state.params, *extra_dpo_args, is_train=True)
 +    else:
-+      from legate.jax import microbatch
++      from multimesh.jax import microbatch
 +
 +      def microbatch_input_sharding(x):
 +        return None

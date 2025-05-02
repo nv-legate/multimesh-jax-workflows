@@ -20,7 +20,7 @@ on:
         type: string
       base_image:
         description: 'The base stage/image to build maxtext from'
-        default: 'ghcr.io/nv-legate/legate-jax-dev:base'
+        default: 'ghcr.io/nv-legate/multimesh-jax-dev:base'
         type: string
 
 permissions:
@@ -68,7 +68,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CACHE_DIR }}
-          key: legate-jax-workflows
+          key: multimesh-jax-workflows
 
       - name: Start bazel cache
         run: |
@@ -115,8 +115,8 @@ jobs:
 
       - name: Push image to ghcr.io
         run: |
-          docker tag "${{ inputs.tag }}" "ghcr.io/nv-legate/legate-jax-workflows/${{ inputs.tag }}"
-          docker push "ghcr.io/nv-legate/legate-jax-workflows/${{ inputs.tag }}"
+          docker tag "${{ inputs.tag }}" "ghcr.io/nv-legate/multimesh-jax-workflows/${{ inputs.tag }}"
+          docker push "ghcr.io/nv-legate/multimesh-jax-workflows/${{ inputs.tag }}"
 
   test:
     needs:
@@ -125,14 +125,14 @@ jobs:
 
     container:
       options: --cap-add SYS_ADMIN --entrypoint /opt/entrypoint.sh --gpus 0
-      image: ghcr.io/nv-legate/legate-jax-workflows/legate-jax-dev:maxtext
+      image: ghcr.io/nv-legate/multimesh-jax-workflows/multimesh-jax-dev:maxtext
       env:
         NVIDIA_VISIBLE_DEVICES: ${{ env.NVIDIA_VISIBLE_DEVICES }}
 
     defaults:
       run:
         shell: bash -xeuo pipefail {0}
-        working-directory: /opt/workspace/legate-jax
+        working-directory: /opt/workspace/multimesh-jax
 
     steps:
       - name: Run Microbatch smoke test

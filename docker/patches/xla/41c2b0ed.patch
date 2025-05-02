@@ -17,10 +17,10 @@ index ee6ca187cc..fe68124bb7 100644
 +# Directory where clangd puts its indexing work
 +/.cache/
 diff --git a/BUILD.bazel b/BUILD.bazel
-index 23644329d2..907fdebadb 100644
+index 23644329d2..f4ff6defeb 100644
 --- a/BUILD.bazel
 +++ b/BUILD.bazel
-@@ -12,3 +12,20 @@ license(
+@@ -12,3 +12,19 @@ license(
      package_name = "xla",
      license_kinds = ["@rules_license//licenses/spdx:Apache-2.0"],
  )
@@ -35,10 +35,9 @@ index 23644329d2..907fdebadb 100644
 +      "//xla/python:xla_client" : "--config=cuda --check_visibility=false",
 +      "//xla/service/gpu:gpu_executable" : "--config=cuda --check_visibility=false",
 +      "//xla/service/gpu:gpu_compiler" : "--config=cuda --check_visibility=false",
-+      "//xla/pjrt/legate:liblegate_xla_client" : "--config=cuda --check_visibility=false",
-+      "//xla/pjrt/legate:*" : "--config=cuda --check_visibility=false",
-+      "//xla/pjrt/legate:hlo_partition_test" : "--config=cuda --check_visibility=false",
-+      "//xla/pjrt/legate:legate_pjrt_client_test" : "--config=cuda --check_visibility=false",
++      "//xla/pjrt/multimesh:libmultimesh_xla_client.so" : "--config=cuda --check_visibility=false --override_repository=zuku=/opt/workspace/zuku --override_repository=realm=/opt/workspace/zuku/realm",
++      "//xla/pjrt/multimesh:mpmd_partition_test" : "--config=cuda --check_visibility=false --override_repository=zuku=/opt/workspace/zuku --override_repository=realm=/opt/workspace/zuku/realm",
++      "//xla/pjrt/multimesh:mm_pjrt_executable_test" : "--config=cuda --check_visibility=false --override_repository=zuku=/opt/workspace/zuku --override_repository=realm=/opt/workspace/zuku/realm",
 +    },
 +)
 diff --git a/WORKSPACE b/WORKSPACE
@@ -1383,92 +1382,6 @@ index d62531152d..39f9d8fca4 100644
      # Resolve all labels before doing any real work. Resolving causes the
      # function to be restarted with all previous state being lost. This
      # can easily lead to a O(n^2) runtime in the number of labels.
-diff --git a/third_party/tsl/third_party/legate/BUILD b/third_party/tsl/third_party/legate/BUILD
-new file mode 100644
-index 0000000000..e69de29bb2
-diff --git a/third_party/tsl/third_party/legate/legate_configure.bzl b/third_party/tsl/third_party/legate/legate_configure.bzl
-new file mode 100644
-index 0000000000..64a69ed4ad
---- /dev/null
-+++ b/third_party/tsl/third_party/legate/legate_configure.bzl
-@@ -0,0 +1,41 @@
-+load(
-+    "//third_party/gpus:cuda_configure.bzl",
-+    "enable_cuda",
-+    "find_cuda_config",
-+)
-+load(
-+    "//third_party/remote_config:common.bzl",
-+    "config_repo_label",
-+    "get_host_environ",
-+)
-+
-+def _label(file):
-+    return Label("//third_party/legate:{}".format(file))
-+
-+def _create_local_legate_repository(repository_ctx):
-+    legate_prefix = get_host_environ(repository_ctx, "XLA_LEGATE_PREFIX")
-+    if legate_prefix != None:
-+        config = {
-+            "%{legate_incdir}": legate_prefix + "/include",
-+        }
-+    else:
-+        legate_src_dir = get_host_environ(repository_ctx, "XLA_LEGATE_SOURCE_DIR")
-+        config = {
-+            "%{legate_incdir}": legate_src_dir + "/src/base",
-+        }
-+
-+    repository_ctx.template("BUILD", _label("system.BUILD.tpl"), config)
-+
-+_ENVIRONS = [
-+  "XLA_LEGATE_ROOT",
-+]
-+
-+legate_configure = repository_rule(
-+    implementation = _create_local_legate_repository,
-+    environ = _ENVIRONS,
-+    remotable = True,
-+    attrs = {
-+        "environ": attr.string_dict(),
-+    },
-+)
-+
-diff --git a/third_party/tsl/third_party/legate/system.BUILD.tpl b/third_party/tsl/third_party/legate/system.BUILD.tpl
-new file mode 100644
-index 0000000000..5451a277c3
---- /dev/null
-+++ b/third_party/tsl/third_party/legate/system.BUILD.tpl
-@@ -0,0 +1,30 @@
-+filegroup(
-+    name = "LICENSE",
-+    visibility = ["//visibility:public"],
-+)
-+
-+cc_library(
-+    name = "legate_xla_runtime",
-+    srcs = ["liblegate_xla_runtime.so"],
-+    hdrs = ["legate_xla_common.h", "legate_to_xla.h", "xla_to_legate.h"],
-+    include_prefix = "third_party/legate",
-+    visibility = ["//visibility:public"],
-+    deps = [
-+        "@local_config_cuda//cuda:cuda_headers",
-+    ],
-+)
-+
-+genrule(
-+    name = "legate-files",
-+    outs = [
-+      "legate_xla_common.h",
-+      "legate_to_xla.h",
-+      "xla_to_legate.h",
-+    ],
-+    cmd = """
-+cp "%{legate_incdir}/legate_xla_common.h" "$(@D)/legate_xla_common.h"
-+cp "%{legate_incdir}/legate_to_xla.h" "$(@D)/legate_to_xla.h"
-+cp "%{legate_incdir}/xla_to_legate.h" "$(@D)/xla_to_legate.h"
-+"""
-+)
-+
 diff --git a/third_party/tsl/third_party/nccl/hermetic/cuda_nccl.BUILD.tpl b/third_party/tsl/third_party/nccl/hermetic/cuda_nccl.BUILD.tpl
 index 8dcd78f7bb..359cd3fe5d 100644
 --- a/third_party/tsl/third_party/nccl/hermetic/cuda_nccl.BUILD.tpl
@@ -1508,10 +1421,10 @@ index 8dcd78f7bb..359cd3fe5d 100644
      strip_include_prefix = "include",
 diff --git a/third_party/tsl/workspace2.bzl b/third_party/tsl/workspace2.bzl
 new file mode 100644
-index 0000000000..1f0adb57ee
+index 0000000000..90485629a8
 --- /dev/null
 +++ b/third_party/tsl/workspace2.bzl
-@@ -0,0 +1,629 @@
+@@ -0,0 +1,627 @@
 +"""TensorFlow workspace initialization. Consult the WORKSPACE on how to use it."""
 +
 +# Import third party config rules.
@@ -1537,7 +1450,6 @@ index 0000000000..1f0adb57ee
 +load("//third_party/implib_so:workspace.bzl", implib_so = "repo")
 +load("//third_party/llvm:setup.bzl", "llvm_setup")
 +load("//third_party/nasm:workspace.bzl", nasm = "repo")
-+load("//third_party/legate:legate_configure.bzl", "legate_configure")
 +load("//third_party/py:python_configure.bzl", "python_configure")
 +load("//third_party/py/ml_dtypes:workspace.bzl", ml_dtypes = "repo")
 +load("//third_party/pybind11_abseil:workspace.bzl", pybind11_abseil = "repo")
@@ -1583,7 +1495,6 @@ index 0000000000..1f0adb57ee
 +    clang6_configure(name = "local_config_clang6")
 +    cc_download_clang_toolchain(name = "local_config_download_clang")
 +    tensorrt_configure(name = "local_config_tensorrt")
-+    legate_configure(name = "local_config_legate")
 +    git_configure(name = "local_config_git")
 +    syslibs_configure(name = "local_config_syslibs")
 +    python_configure(name = "local_config_python")
@@ -3153,22 +3064,22 @@ index 72e6239e81..f0a8aac25b 100644
        const XlaComputation& computation,
        const std::vector<const Shape*>& argument_layout_pointers,
 diff --git a/xla/python/BUILD b/xla/python/BUILD
-index f97e31e21d..9d8e9fa004 100644
+index f97e31e21d..12117ab80d 100644
 --- a/xla/python/BUILD
 +++ b/xla/python/BUILD
 @@ -393,6 +393,7 @@ cc_library(
          "//xla/pjrt/distributed",
          "//xla/pjrt/distributed:client",
          "//xla/python/compile_only_ifrt:client",
-+        "//xla/python/ifrt/legate:legate_ifrt_client",
++        "//xla/python/ifrt/multimesh:multimesh_ifrt_client",
          "//xla/python/ifrt",
          "//xla/python/ifrt:attribute_map",
          "//xla/python/ifrt:custom_call_program",
-diff --git a/xla/python/ifrt/legate/BUILD b/xla/python/ifrt/legate/BUILD
+diff --git a/xla/python/ifrt/multimesh/BUILD b/xla/python/ifrt/multimesh/BUILD
 new file mode 100644
-index 0000000000..8ff5984ce1
+index 0000000000..e4b3bfdbe8
 --- /dev/null
-+++ b/xla/python/ifrt/legate/BUILD
++++ b/xla/python/ifrt/multimesh/BUILD
 @@ -0,0 +1,36 @@
 +load("//xla/tsl/platform:rules_cc.bzl", "cc_library")
 +
@@ -3178,9 +3089,9 @@ index 0000000000..8ff5984ce1
 +)
 +
 +cc_library(
-+    name = "legate_ifrt_client",
-+    srcs = ["legate_ifrt_client.cc"],
-+    hdrs = ["legate_ifrt_client.h"],
++    name = "multimesh_ifrt_client",
++    srcs = ["multimesh_ifrt_client.cc"],
++    hdrs = ["multimesh_ifrt_client.h"],
 +    deps = [
 +        "//xla/python/ifrt:serdes",
 +        "//xla:util",
@@ -3206,28 +3117,18 @@ index 0000000000..8ff5984ce1
 +    ],
 +)
 +
-diff --git a/xla/python/ifrt/legate/legate_ifrt_client.cc b/xla/python/ifrt/legate/legate_ifrt_client.cc
+diff --git a/xla/python/ifrt/multimesh/multimesh_ifrt_client.cc b/xla/python/ifrt/multimesh/multimesh_ifrt_client.cc
 new file mode 100644
-index 0000000000..bc7dc38b8a
+index 0000000000..414627f7f0
 --- /dev/null
-+++ b/xla/python/ifrt/legate/legate_ifrt_client.cc
++++ b/xla/python/ifrt/multimesh/multimesh_ifrt_client.cc
 @@ -0,0 +1,668 @@
-+/* Copyright 2022 The TensorFlow Authors. All Rights Reserved.
++/* clang-format off
++ * SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++ * SPDX-License-Identifier: Apache-2.0
++ */
 +
-+Licensed under the Apache License, Version 2.0 (the "License");
-+you may not use this file except in compliance with the License.
-+You may obtain a copy of the License at
-+
-+    http://www.apache.org/licenses/LICENSE-2.0
-+
-+Unless required by applicable law or agreed to in writing, software
-+distributed under the License is distributed on an "AS IS" BASIS,
-+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+See the License for the specific language governing permissions and
-+limitations under the License.
-+==============================================================================*/
-+
-+#include "xla/python/ifrt/legate/legate_ifrt_client.h"
++#include "xla/python/ifrt/multimesh/multimesh_ifrt_client.h"
 +
 +#include <stdexcept>
 +
@@ -3259,48 +3160,50 @@ index 0000000000..bc7dc38b8a
 +
 +namespace xla {
 +
-+LegateIfrtArray::LegateIfrtArray(LegateIfrtClient* client,
-+                                 tsl::RCReference<ifrt::Array> wrapped,
-+                                 ArrayOrigin origin,
-+                                 std::optional<std::string> name)
++MultimeshIfrtArray::MultimeshIfrtArray(MultimeshIfrtClient* client,
++                                       tsl::RCReference<ifrt::Array> wrapped,
++                                       ArrayOrigin origin,
++                                       std::optional<std::string> name)
 +    : client_(client),
 +      wrapped_(std::move(wrapped)),
 +      origin_(origin),
 +      name_(std::move(name)) {}
 +
-+ifrt::Client* LegateIfrtArray::client() const { return client_; }
++ifrt::Client* MultimeshIfrtArray::client() const { return client_; }
 +
-+ifrt::DType LegateIfrtArray::dtype() const { return wrapped_->dtype(); }
++ifrt::DType MultimeshIfrtArray::dtype() const { return wrapped_->dtype(); }
 +
-+const ifrt::Shape& LegateIfrtArray::shape() const { return wrapped_->shape(); }
++const ifrt::Shape& MultimeshIfrtArray::shape() const {
++  return wrapped_->shape();
++}
 +
-+const ifrt::Sharding& LegateIfrtArray::sharding() const {
++const ifrt::Sharding& MultimeshIfrtArray::sharding() const {
 +  return wrapped_->sharding();
 +}
 +
-+std::shared_ptr<const ifrt::Sharding> LegateIfrtArray::shared_ptr_sharding()
++std::shared_ptr<const ifrt::Sharding> MultimeshIfrtArray::shared_ptr_sharding()
 +    const {
 +  return wrapped_->shared_ptr_sharding();
 +}
 +
 +absl::StatusOr<std::vector<tsl::RCReference<ifrt::Array>>>
-+LegateIfrtArray::DisassembleIntoSingleDeviceArrays(
++MultimeshIfrtArray::DisassembleIntoSingleDeviceArrays(
 +    ifrt::ArrayCopySemantics array_copy_semantics,
 +    ifrt::SingleDeviceShardSemantics single_device_shard_semantics) {
 +  return DisassembleIntoSingleDeviceArrays(array_copy_semantics);
 +}
 +
 +absl::StatusOr<std::vector<tsl::RCReference<ifrt::Array>>>
-+LegateIfrtArray::DisassembleIntoSingleDeviceArrays(
++MultimeshIfrtArray::DisassembleIntoSingleDeviceArrays(
 +    ifrt::ArrayCopySemantics semantics) {
-+  VLOG(3) << "LegateIfrtArray::DisassembleIntoSingleDeviceArrays: " << name()
++  VLOG(3) << "MultimeshIfrtArray::DisassembleIntoSingleDeviceArrays: " << name()
 +          << ", shape=" << shape() << ", sharding=" << sharding()
 +          << ", origin=" << (int)origin_;
 +
 +  auto* ifrt_array = llvm::dyn_cast<ifrt::PjRtArray>(wrapped_.get());
 +  if (!ifrt_array) {
 +    return InvalidArgument(
-+        "LegateIfrtArray::DisassembleIntoSingleDeviceArrays: input is not a "
++        "MultimeshIfrtArray::DisassembleIntoSingleDeviceArrays: input is not a "
 +        "ifrt::PjRtArray");
 +  }
 +
@@ -3312,7 +3215,7 @@ index 0000000000..bc7dc38b8a
 +
 +  for (size_t idx = 0; idx < ifrt_array->pjrt_buffers().size(); ++idx) {
 +    const auto& [shape, sharding] = assembly[idx];
-+    VLOG(3) << "LegateIfrtArray::DisassembleIntoSingleDeviceArrays: shard "
++    VLOG(3) << "MultimeshIfrtArray::DisassembleIntoSingleDeviceArrays: shard "
 +            << idx << " has shape=" << shape << ", sharding=" << *sharding;
 +    // due to MPMD sharding, the buffers may end up being empty
 +    // these should not be included in the slice operation
@@ -3344,17 +3247,17 @@ index 0000000000..bc7dc38b8a
 +          ifrt::PjRtArray::Create(ifrt_array->client(), ifrt_array->dtype(),
 +                                  shape, sharding, {std::move(next_buffer)},
 +                                  std::move(layout)));
-+      new_arrays.push_back(tsl::MakeRef<LegateIfrtArray>(
++      new_arrays.push_back(tsl::MakeRef<MultimeshIfrtArray>(
 +          client_, std::move(new_wrapped), ArrayOrigin::Disassemble,
 +          std::move(name)));
 +    }
-+    VLOG(5) << "LegateIfrtArray::DisassembleIntoSingleDeviceArrays: shard "
++    VLOG(5) << "MultimeshIfrtArray::DisassembleIntoSingleDeviceArrays: shard "
 +            << idx << " has shape=" << shape << ", sharding=" << *sharding;
 +  }
 +  return std::move(new_arrays);
 +}
 +
-+std::string LegateIfrtArray::name() const {
++std::string MultimeshIfrtArray::name() const {
 +  if (name_.has_value()) {
 +    return *name_;
 +  }
@@ -3379,52 +3282,49 @@ index 0000000000..bc7dc38b8a
 +}
 +
 +absl::StatusOr<tsl::RCReference<ifrt::Array>>
-+LegateIfrtArray::FullyReplicatedShard(ifrt::ArrayCopySemantics semantics) {
-+  VLOG(3) << "LegateIfrtArray::FullyReplicatedShard: semantics="
++MultimeshIfrtArray::FullyReplicatedShard(ifrt::ArrayCopySemantics semantics) {
++  VLOG(3) << "MultimeshIfrtArray::FullyReplicatedShard: semantics="
 +          << (int)semantics << ", origin=" << (int)origin_
 +          << ", name=" << name() << ", shape=" << shape()
 +          << ", sharding=" << sharding();
 +
 +  if (semantics == ifrt::ArrayCopySemantics::kAlwaysCopy) {
 +    return UnimplementedStrCat(
-+        "LegateIfrtArray::FullyReplicatedShard: kAlwaysCopy semantics not yet "
-+        "supported");
++        "MultimeshIfrtArray::FullyReplicatedShard: kAlwaysCopy not supported");
 +  }
 +
-+  // because of control replication, Legate does not really support the idea of
-+  // a single shard
 +  TF_ASSIGN_OR_RETURN(auto arrays,
 +                      DisassembleIntoSingleDeviceArrays(semantics));
 +
-+  VLOG(3) << "LegateIfrtArray::FullyReplicatedShard: has " << arrays.size()
++  VLOG(3) << "MultimeshIfrtArray::FullyReplicatedShard: has " << arrays.size()
 +          << " valid shards";
 +
 +  if (arrays.empty()) {
 +    return InvalidArgumentStrCat(
-+        "LegateIfrtArray::FullyReplicatedShard: ", shape().DebugString(), " ",
-+        sharding().DebugString(), " has no shards");
++        "MultimeshIfrtArray::FullyReplicatedShard: ", shape().DebugString(),
++        " ", sharding().DebugString(), " has no shards");
 +  }
 +  // Disassemble should return only non-empty device arrays
 +  return arrays[0];
 +}
 +
 +ABSL_MUST_USE_RESULT
-+ifrt::Future<> LegateIfrtArray::CopyToHostBuffer(
++ifrt::Future<> MultimeshIfrtArray::CopyToHostBuffer(
 +    void* data, std::optional<absl::Span<const int64_t>> byte_strides,
 +    ifrt::ArrayCopySemantics semantics) {
-+  VLOG(2) << "LegateIfrtArray::CopyToHostBuffer: " << shape() << ", "
++  VLOG(2) << "MultimeshIfrtArray::CopyToHostBuffer: " << shape() << ", "
 +          << sharding() << ", origin=" << (int)origin_;
 +  return wrapped_->CopyToHostBuffer(data, byte_strides, semantics);
 +}
 +
-+absl::StatusOr<std::shared_ptr<const PjRtLayout>> LegateIfrtArray::layout()
++absl::StatusOr<std::shared_ptr<const PjRtLayout>> MultimeshIfrtArray::layout()
 +    const {
 +  return wrapped_->layout();
 +}
 +
 +// Returns a future that becomes ready when the buffer is computed or has an
 +// error.
-+ifrt::Future<> LegateIfrtArray::GetReadyFuture() const {
++ifrt::Future<> MultimeshIfrtArray::GetReadyFuture() const {
 +  return wrapped_->GetReadyFuture();
 +}
 +
@@ -3434,62 +3334,66 @@ index 0000000000..bc7dc38b8a
 +// Implementations that do not track the completion of the deletion operation
 +// may make the future immediately ready with an OK status.
 +// TODO(phawkins): decide if we want Delete() to be idempotent.
-+ifrt::Future<> LegateIfrtArray::Delete() { return wrapped_->Delete(); }
++ifrt::Future<> MultimeshIfrtArray::Delete() { return wrapped_->Delete(); }
 +
 +// Returns whether the value has been enqueued for deletion from the devices.
-+bool LegateIfrtArray::IsDeleted() const { return wrapped_->IsDeleted(); }
++bool MultimeshIfrtArray::IsDeleted() const { return wrapped_->IsDeleted(); }
 +
-+std::string LegateIfrtArray::DebugString() const {
++std::string MultimeshIfrtArray::DebugString() const {
 +  return wrapped_->DebugString();
 +}
 +
-+absl::string_view LegateLoadedExecutable::name() const { return exe_->name(); }
++absl::string_view MultiMeshLoadedExecutable::name() const {
++  return exe_->name();
++}
 +
-+ifrt::Client* LegateLoadedExecutable::client() const { return client_; }
++ifrt::Client* MultiMeshLoadedExecutable::client() const { return client_; }
 +
 +// Returns a fingerprint of this executable.
-+absl::StatusOr<std::optional<std::string>> LegateLoadedExecutable::Fingerprint()
-+    const {
++absl::StatusOr<std::optional<std::string>>
++MultiMeshLoadedExecutable::Fingerprint() const {
 +  return exe_->Fingerprint();
 +}
 +
 +// Serializes this executable into a string. The compatibility of the
 +// serialized executable is implementation-specific.
-+absl::StatusOr<std::string> LegateLoadedExecutable::Serialize() const {
++absl::StatusOr<std::string> MultiMeshLoadedExecutable::Serialize() const {
 +  return exe_->Serialize();
 +}
 +
-+int LegateLoadedExecutable::num_devices() const { return exe_->num_devices(); }
++int MultiMeshLoadedExecutable::num_devices() const {
++  return exe_->num_devices();
++}
 +
-+int64_t LegateLoadedExecutable::SizeOfGeneratedCodeInBytes() const {
++int64_t MultiMeshLoadedExecutable::SizeOfGeneratedCodeInBytes() const {
 +  return exe_->SizeOfGeneratedCodeInBytes();
 +}
 +
 +absl::StatusOr<CompiledMemoryStats>
-+LegateLoadedExecutable::GetCompiledMemoryStats() const {
++MultiMeshLoadedExecutable::GetCompiledMemoryStats() const {
 +  return exe_->GetCompiledMemoryStats();
 +}
 +
 +absl::StatusOr<std::vector<std::shared_ptr<const xla::PjRtLayout>>>
-+LegateLoadedExecutable::GetOutputLayouts() const {
++MultiMeshLoadedExecutable::GetOutputLayouts() const {
 +  return output_layouts_;
 +}
 +
 +std::optional<std::vector<OpSharding>>
-+LegateLoadedExecutable::GetParameterShardings() const {
++MultiMeshLoadedExecutable::GetParameterShardings() const {
 +  return parameter_shardings_;
 +}
 +
 +// Returns a list of output OpSharding.
 +std::optional<std::vector<OpSharding>>
-+LegateLoadedExecutable::GetOutputShardings() const {
++MultiMeshLoadedExecutable::GetOutputShardings() const {
 +  return output_shardings_;
 +}
 +
 +// Return an HloModule (optimized) per partition.
 +absl::StatusOr<std::vector<std::shared_ptr<HloModule>>>
-+LegateLoadedExecutable::GetHloModules() const {
-+  return Unimplemented("LegateLoadedExecutable::GetHLoModules");
++MultiMeshLoadedExecutable::GetHloModules() const {
++  return Unimplemented("MultiMeshLoadedExecutable::GetHLoModules");
 +}
 +
 +// Returns a list of lists of memory kind strings for output. The returned
@@ -3497,37 +3401,37 @@ index 0000000000..bc7dc38b8a
 +// equal to `GetHloModules()`. Under SPMD, one can use
 +// `GetOutputMemoryKinds().front()`.
 +absl::StatusOr<std::vector<std::vector<absl::string_view>>>
-+LegateLoadedExecutable::GetOutputMemoryKinds() const {
++MultiMeshLoadedExecutable::GetOutputMemoryKinds() const {
 +  return exe_->GetOutputMemoryKinds();
 +}
 +
 +absl::StatusOr<std::vector<std::shared_ptr<const PjRtLayout>>>
-+LegateLoadedExecutable::GetParameterLayouts() const {
++MultiMeshLoadedExecutable::GetParameterLayouts() const {
 +  return parameter_layouts_;
 +}
 +
 +absl::StatusOr<xla::ifrt::AttributeMap>
-+LegateLoadedExecutable::GetCostAnalysis() const {
-+  return Unimplemented("LegateLoadedExecutable::GetCostAnalysis");
++MultiMeshLoadedExecutable::GetCostAnalysis() const {
++  return Unimplemented("MultiMeshLoadedExecutable::GetCostAnalysis");
 +}
 +
 +absl::StatusOr<ifrt::LoadedExecutable::ExecuteResult>
-+LegateLoadedExecutable::Execute(
++MultiMeshLoadedExecutable::Execute(
 +    absl::Span<tsl::RCReference<ifrt::Array>> args,
 +    const ExecuteOptions& options,
 +    std::optional<tsl::RCReference<ifrt::DeviceList>> devices) {
-+  VLOG(3) << "LegateLoadedExecutable::Execute: " << name();
++  VLOG(3) << "MultiMeshLoadedExecutable::Execute: " << name();
 +  std::vector<tsl::RCReference<ifrt::Array>> unwrapped_args;
 +  unwrapped_args.reserve(args.size());
 +  for (auto& arg : args) {
-+    auto* arr = dynamic_cast<LegateIfrtArray*>(arg.get());
++    auto* arr = dynamic_cast<MultimeshIfrtArray*>(arg.get());
 +    // I should be able to use the llvm cast, but this is not working
 +    // and is returning non-null pointers for arrays that are not
-+    // LegateIfrtArray
-+    // LegateIfrtArray* arr =
-+    // llvm::dyn_cast_or_null<LegateIfrtArray>(arg.get());
++    // MultimeshIfrtArray
++    // MultimeshIfrtArray* arr =
++    // llvm::dyn_cast_or_null<MultimeshIfrtArray>(arg.get());
 +    if (!arr) {
-+      return InvalidArgument("Input is not a LegateIfrtArray");
++      return InvalidArgument("Input is not a MultimeshIfrtArray");
 +    }
 +    auto* sanity =
 +        dynamic_cast<ifrt::PjRtCompatibleArray*>(arr->wrapped().get());
@@ -3547,33 +3451,35 @@ index 0000000000..bc7dc38b8a
 +    auto* ifrt_arr = llvm::dyn_cast<ifrt::PjRtArray>(arr.get());
 +    if (!ifrt_arr) {
 +      return InvalidArgument(
-+          "Output of LegateLoadedExecutable is not an ifrt::PjRtArray");
++          "Output of MultiMeshLoadedExecutable is not an ifrt::PjRtArray");
 +    }
-+    new_result.outputs.push_back(tsl::MakeRef<LegateIfrtArray>(
++    new_result.outputs.push_back(tsl::MakeRef<MultimeshIfrtArray>(
 +        client_, std::move(arr), ArrayOrigin::Executable,
 +        ifrt_arr->pjrt_buffers().front()->name()));
 +  }
 +  return new_result;
 +}
 +
-+ifrt::Future<> LegateLoadedExecutable::Delete() { return exe_->Delete(); }
++ifrt::Future<> MultiMeshLoadedExecutable::Delete() { return exe_->Delete(); }
 +
-+bool LegateLoadedExecutable::IsDeleted() const { return exe_->IsDeleted(); }
++bool MultiMeshLoadedExecutable::IsDeleted() const { return exe_->IsDeleted(); }
 +
-+absl::Span<ifrt::Device* const> LegateLoadedExecutable::addressable_devices()
++absl::Span<ifrt::Device* const> MultiMeshLoadedExecutable::addressable_devices()
 +    const {
 +  return exe_->addressable_devices();
 +}
 +
-+absl::StatusOr<std::unique_ptr<ifrt::Executable>> LegateIfrtCompiler::Compile(
-+    std::unique_ptr<ifrt::Program> program, const ifrt::Topology& topology,
-+    std::unique_ptr<ifrt::CompileOptions> options) {
-+  return Unimplemented("LegateIfrtCompiler::Compile(program,topology,options)");
++absl::StatusOr<std::unique_ptr<ifrt::Executable>>
++MultimeshIfrtCompiler::Compile(std::unique_ptr<ifrt::Program> program,
++                               const ifrt::Topology& topology,
++                               std::unique_ptr<ifrt::CompileOptions> options) {
++  return Unimplemented(
++      "MultimeshIfrtCompiler::Compile(program,topology,options)");
 +}
 +
 +absl::StatusOr<std::unique_ptr<ifrt::LoadedExecutable>>
-+LegateIfrtCompiler::Compile(std::unique_ptr<ifrt::Program> program,
-+                            std::unique_ptr<ifrt::CompileOptions> options) {
++MultimeshIfrtCompiler::Compile(std::unique_ptr<ifrt::Program> program,
++                               std::unique_ptr<ifrt::CompileOptions> options) {
 +  TF_ASSIGN_OR_RETURN(auto exe,
 +                      wrapped_.Compile(std::move(program), std::move(options)));
 +
@@ -3581,41 +3487,43 @@ index 0000000000..bc7dc38b8a
 +  if (!pjrt_compat_exe) {
 +    return InternalStrCat(
 +        exe->name(),
-+        " is not a PjRtCompatibleExecutable in LegateIfrtCompiler::Compile");
++        " is not a PjRtCompatibleExecutable in MultimeshIfrtCompiler::Compile");
 +  }
 +  PjRtExecutable* pjrt_exe = pjrt_compat_exe->pjrt_loaded_executable();
 +
 +  TF_ASSIGN_OR_RETURN(auto param_layouts, pjrt_exe->GetParameterLayouts());
 +  TF_ASSIGN_OR_RETURN(auto output_layouts, pjrt_exe->GetOutputLayouts());
 +
-+  return std::unique_ptr<ifrt::LoadedExecutable>(new LegateLoadedExecutable(
++  return std::unique_ptr<ifrt::LoadedExecutable>(new MultiMeshLoadedExecutable(
 +      client_, std::move(exe), std::move(param_layouts),
 +      std::move(output_layouts), pjrt_exe->GetParameterShardings(),
 +      pjrt_exe->GetOutputShardings()));
 +}
 +
 +absl::StatusOr<std::unique_ptr<ifrt::LoadedExecutable>>
-+LegateIfrtCompiler::DeserializeLoadedExecutable(
++MultimeshIfrtCompiler::DeserializeLoadedExecutable(
 +    absl::string_view serialized,
 +    std::unique_ptr<ifrt::DeserializeExecutableOptions> options) {
 +  return Unimplemented(
-+      "LegateIfrtCompiler::DeserializeLoadedExecutable not yet available");
++      "MultimeshIfrtCompiler::DeserializeLoadedExecutable not yet available");
 +}
 +
-+LegateIfrtClient::LegateIfrtClient(std::unique_ptr<ifrt::PjRtClient> client)
++MultimeshIfrtClient::MultimeshIfrtClient(
++    std::unique_ptr<ifrt::PjRtClient> client)
 +    : pjrt_client_(std::move(client)), compiler_(this, pjrt_client_.get()) {}
 +
-+absl::Span<xla::ifrt::Device* const> LegateIfrtClient::GetAllDevices() const {
++absl::Span<xla::ifrt::Device* const> MultimeshIfrtClient::GetAllDevices()
++    const {
 +  return pjrt_client_->GetAllDevices();
 +}
 +
-+ifrt::DeviceListRef LegateIfrtClient::MakeDeviceList(
++ifrt::DeviceListRef MultimeshIfrtClient::MakeDeviceList(
 +    absl::Span<ifrt::Device* const> devices) const {
 +  return pjrt_client_->MakeDeviceList(devices);
 +}
 +
 +absl::StatusOr<std::vector<tsl::RCReference<ifrt::Array>>>
-+LegateIfrtClient::CopyArrays(
++MultimeshIfrtClient::CopyArrays(
 +    absl::Span<tsl::RCReference<ifrt::Array>> arrays,
 +    std::optional<tsl::RCReference<ifrt::DeviceList>> devices,
 +    std::optional<ifrt::MemoryKind> memory_kind,
@@ -3644,15 +3552,15 @@ index 0000000000..bc7dc38b8a
 +                   llvm::dyn_cast<ifrt::BasicStringArray>(array.get())) {
 +      TF_ASSIGN_OR_RETURN(new_arrays.emplace_back(),
 +                          string_array->Copy(devices, memory_kind, semantics));
-+    } else if (auto* const legate_array =
-+                   dynamic_cast<LegateIfrtArray*>(array.get())) {
++    } else if (auto* const mm_array =
++                   dynamic_cast<MultimeshIfrtArray*>(array.get())) {
 +      TF_ASSIGN_OR_RETURN(
 +          auto new_pjrt_array,
-+          llvm::dyn_cast<ifrt::PjRtArray>(legate_array->wrapped().get())
++          llvm::dyn_cast<ifrt::PjRtArray>(mm_array->wrapped().get())
 +              ->Copy(std::move(devices), memory_kind, semantics));
-+      new_arrays.emplace_back(tsl::MakeRef<LegateIfrtArray>(
++      new_arrays.emplace_back(tsl::MakeRef<MultimeshIfrtArray>(
 +          this, std::move(new_pjrt_array), ArrayOrigin::Copy,
-+          legate_array->name()));
++          mm_array->name()));
 +    } else {
 +      return absl::InvalidArgumentError(
 +          "Unsupported array type for PjRtClient::CopyArrays");
@@ -3662,15 +3570,15 @@ index 0000000000..bc7dc38b8a
 +}
 +
 +absl::StatusOr<std::vector<tsl::RCReference<xla::ifrt::Array>>>
-+LegateIfrtClient::RemapArrays(
++MultimeshIfrtClient::RemapArrays(
 +    const ifrt::RemapPlan& plan,
 +    absl::Span<tsl::RCReference<xla::ifrt::Array>> arrays,
 +    ifrt::ArrayCopySemantics semantics) {
 +  std::vector<tsl::RCReference<ifrt::Array>> pjrt_input_arrays;
 +  pjrt_input_arrays.reserve(arrays.size());
 +  for (auto&& arr : arrays) {
-+    auto* legate_arr = dynamic_cast<LegateIfrtArray*>(arr.get());
-+    pjrt_input_arrays.push_back(legate_arr->wrapped());
++    auto* mm_array = dynamic_cast<MultimeshIfrtArray*>(arr.get());
++    pjrt_input_arrays.push_back(mm_array->wrapped());
 +  }
 +
 +  TF_ASSIGN_OR_RETURN(
@@ -3681,20 +3589,20 @@ index 0000000000..bc7dc38b8a
 +  std::vector<tsl::RCReference<ifrt::Array>> result;
 +  result.reserve(pjrt_output_arrays.size());
 +  for (auto&& arr : pjrt_output_arrays) {
-+    result.push_back(tsl::MakeRef<LegateIfrtArray>(
++    result.push_back(tsl::MakeRef<MultimeshIfrtArray>(
 +        this, std::move(arr), ArrayOrigin::Executable, "remapped"));
 +  }
 +  return std::move(result);
 +}
 +
 +absl::StatusOr<tsl::RCReference<ifrt::Array>>
-+LegateIfrtClient::MakeArrayFromHostBuffer(
++MultimeshIfrtClient::MakeArrayFromHostBuffer(
 +    const void* data, ifrt::DType dtype, ifrt::Shape shape,
 +    std::optional<absl::Span<const int64_t>> byte_strides,
 +    std::shared_ptr<const ifrt::Sharding> sharding,
 +    HostBufferSemantics semantics,
 +    std::function<void()> on_done_with_host_buffer) {
-+  VLOG(3) << "LegateIfrtClient::MakeArrayFromHostBuffer: shape=" << shape
++  VLOG(3) << "MultimeshIfrtClient::MakeArrayFromHostBuffer: shape=" << shape
 +          << ", sharding=" << *sharding << ", data=" << data;
 +  if (!llvm::isa<const ifrt::SingleDeviceSharding>(sharding.get())) {
 +    return InvalidArgument(
@@ -3706,25 +3614,25 @@ index 0000000000..bc7dc38b8a
 +                      pjrt_client_->MakeArrayFromHostBuffer(
 +                          data, dtype, shape, byte_strides, sharding, semantics,
 +                          std::move(on_done_with_host_buffer)));
-+  return tsl::MakeRef<LegateIfrtArray>(this, std::move(wrapped),
-+                                       ArrayOrigin::MakeArrayFromHostBuffer);
++  return tsl::MakeRef<MultimeshIfrtArray>(this, std::move(wrapped),
++                                          ArrayOrigin::MakeArrayFromHostBuffer);
 +}
 +
-+const ifrt::AttributeMap& LegateIfrtClient::Attributes() const {
++const ifrt::AttributeMap& MultimeshIfrtClient::Attributes() const {
 +  static ifrt::AttributeMap empty{{}};
 +  return empty;
 +}
 +
 +absl::StatusOr<std::shared_ptr<const PjRtLayout>>
-+LegateIfrtClient::GetDefaultLayout(ifrt::DType dtype,
-+                                   absl::Span<const int64_t> dims,
-+                                   ifrt::Device* device,
-+                                   ifrt::MemoryKind memory_kind) const {
++MultimeshIfrtClient::GetDefaultLayout(ifrt::DType dtype,
++                                      absl::Span<const int64_t> dims,
++                                      ifrt::Device* device,
++                                      ifrt::MemoryKind memory_kind) const {
 +  return pjrt_client_->GetDefaultLayout(dtype, dims, device, memory_kind);
 +}
 +
 +absl::StatusOr<tsl::RCReference<ifrt::Array>>
-+LegateIfrtClient::AssembleArrayFromSingleDeviceArrays(
++MultimeshIfrtClient::AssembleArrayFromSingleDeviceArrays(
 +    ifrt::Shape shape,
 +    absl::Nonnull<std::shared_ptr<const ifrt::Sharding>> sharding,
 +    absl::Span<tsl::RCReference<ifrt::Array>> arrays,
@@ -3735,7 +3643,7 @@ index 0000000000..bc7dc38b8a
 +}
 +
 +absl::StatusOr<tsl::RCReference<ifrt::Array>>
-+LegateIfrtClient::AssembleArrayFromSingleDeviceArrays(
++MultimeshIfrtClient::AssembleArrayFromSingleDeviceArrays(
 +    ifrt::Shape shape,
 +    absl::Nonnull<std::shared_ptr<const ifrt::Sharding>> sharding,
 +    absl::Span<tsl::RCReference<ifrt::Array>> arrays,
@@ -3743,7 +3651,7 @@ index 0000000000..bc7dc38b8a
 +    ifrt::SingleDeviceShardSemantics single_device_shard_semantics) {
 +  if (arrays.empty()) {
 +    return InvalidArgumentStrCat(
-+        "LegateIfrtClient::AssembleArrayFromSingleDeviceArrays: arrays is "
++        "MultimeshIfrtClient::AssembleArrayFromSingleDeviceArrays: arrays is "
 +        "empty");
 +  }
 +  return AssembleArrayFromSingleDeviceArrays(
@@ -3752,19 +3660,19 @@ index 0000000000..bc7dc38b8a
 +}
 +
 +absl::StatusOr<tsl::RCReference<ifrt::Array>>
-+LegateIfrtClient::AssembleArrayFromSingleDeviceArrays(
++MultimeshIfrtClient::AssembleArrayFromSingleDeviceArrays(
 +    ifrt::DType dtype, ifrt::Shape shape,
 +    std::shared_ptr<const ifrt::Sharding> sharding,
 +    absl::Span<tsl::RCReference<ifrt::Array>> arrays,
 +    ifrt::ArrayCopySemantics array_copy_semantics,
 +    ifrt::SingleDeviceShardSemantics single_device_shard_semantics) {
-+  VLOG(3) << "LegateIfrtClient::AssembleArrayFromSingleDeviceArrays: " << shape
-+          << ", " << *sharding;
++  VLOG(3) << "MultimeshIfrtClient::AssembleArrayFromSingleDeviceArrays: "
++          << shape << ", " << *sharding;
 +
 +  auto* hlo_sharding = dynamic_cast<const ifrt::HloSharding*>(sharding.get());
 +  if (!hlo_sharding) {
 +    return InvalidArgument(
-+        "LegateIfrtClient::AssembleArrayFromSingleDeviceArrays: "
++        "MultimeshIfrtClient::AssembleArrayFromSingleDeviceArrays: "
 +        "sharding is not an ifrt::HloSharding");
 +  }
 +
@@ -3775,15 +3683,16 @@ index 0000000000..bc7dc38b8a
 +  ifrt::PjRtCompatibleClient* pjrt_client = nullptr;
 +  ifrt::PjRtArray::PjRtBuffers new_pjrt_buffers;
 +  for (const auto& arr : arrays) {
-+    LegateIfrtArray* legate_arr =
-+        llvm::dyn_cast_or_null<LegateIfrtArray>(arr.get());
++    MultimeshIfrtArray* mm_array =
++        llvm::dyn_cast_or_null<MultimeshIfrtArray>(arr.get());
 +
 +    ifrt::PjRtCompatibleArray* pjrt_arr =
 +        llvm::dyn_cast_or_null<ifrt::PjRtCompatibleArray>(
-+            legate_arr->wrapped().get());
++            mm_array->wrapped().get());
 +    if (!pjrt_arr) {
 +      return InvalidArgument(
-+          "LegateIfrtArray::AssembleArrayFromSingleDeviceArrays: input is not "
++          "MultimeshIfrtArray::AssembleArrayFromSingleDeviceArrays: input is "
++          "not "
 +          "an "
 +          "ifrt::PjRtArray");
 +    }
@@ -3801,44 +3710,44 @@ index 0000000000..bc7dc38b8a
 +      ifrt::PjRtArray::Create(pjrt_client, dtype, shape, sharding,
 +                              std::move(new_pjrt_buffers), std::move(layout)));
 +
-+  return tsl::MakeRef<LegateIfrtArray>(this, std::move(new_wrapped),
-+                                       ArrayOrigin::Assemble, std::move(name));
++  return tsl::MakeRef<MultimeshIfrtArray>(
++      this, std::move(new_wrapped), ArrayOrigin::Assemble, std::move(name));
 +}
 +
-+absl::StatusOr<tsl::RCReference<ifrt::Tuple>> LegateIfrtClient::MakeTuple(
++absl::StatusOr<tsl::RCReference<ifrt::Tuple>> MultimeshIfrtClient::MakeTuple(
 +    absl::Span<tsl::RCReference<ifrt::Value>> values) {
 +  return pjrt_client_->MakeTuple(values);
 +}
 +
-+absl::string_view LegateIfrtClient::runtime_type() const {
++absl::string_view MultimeshIfrtClient::runtime_type() const {
 +  return pjrt_client_->runtime_type();
 +}
 +
-+absl::string_view LegateIfrtClient::platform_name() const {
++absl::string_view MultimeshIfrtClient::platform_name() const {
 +  return pjrt_client_->platform_name();
 +}
 +
-+absl::string_view LegateIfrtClient::platform_version() const {
++absl::string_view MultimeshIfrtClient::platform_version() const {
 +  return pjrt_client_->platform_version();
 +}
 +
-+ifrt::PlatformId LegateIfrtClient::platform_id() const {
++ifrt::PlatformId MultimeshIfrtClient::platform_id() const {
 +  return pjrt_client_->platform_id();
 +}
 +
-+int LegateIfrtClient::device_count() const {
++int MultimeshIfrtClient::device_count() const {
 +  return pjrt_client_->device_count();
 +}
 +
-+int LegateIfrtClient::addressable_device_count() const {
++int MultimeshIfrtClient::addressable_device_count() const {
 +  return pjrt_client_->addressable_device_count();
 +}
 +
-+absl::Span<ifrt::Device* const> LegateIfrtClient::devices() const {
++absl::Span<ifrt::Device* const> MultimeshIfrtClient::devices() const {
 +  return pjrt_client_->devices();
 +}
 +
-+ifrt::Future<> LegateIfrtClient::GetReadyFuture(
++ifrt::Future<> MultimeshIfrtClient::GetReadyFuture(
 +    absl::Span<const tsl::RCReference<ifrt::Value>> values) {
 +  absl::InlinedVector<ifrt::Future<>, 1> futures;
 +  futures.reserve(values.size());
@@ -3848,61 +3757,52 @@ index 0000000000..bc7dc38b8a
 +  return JoinFutures(futures);
 +}
 +
-+absl::Span<ifrt::Device* const> LegateIfrtClient::addressable_devices() const {
++absl::Span<ifrt::Device* const> MultimeshIfrtClient::addressable_devices()
++    const {
 +  return pjrt_client_->addressable_devices();
 +}
 +
-+int LegateIfrtClient::process_index() const {
++int MultimeshIfrtClient::process_index() const {
 +  return pjrt_client_->process_index();
 +}
 +
-+absl::StatusOr<DeviceAssignment> LegateIfrtClient::GetDefaultDeviceAssignment(
-+    int num_replicas, int num_partitions) const {
++absl::StatusOr<DeviceAssignment>
++MultimeshIfrtClient::GetDefaultDeviceAssignment(int num_replicas,
++                                                int num_partitions) const {
 +  return pjrt_client_->GetDefaultDeviceAssignment(num_replicas, num_partitions);
 +}
 +
-+absl::StatusOr<ifrt::Device*> LegateIfrtClient::LookupDevice(
++absl::StatusOr<ifrt::Device*> MultimeshIfrtClient::LookupDevice(
 +    ifrt::DeviceId device_id) const {
 +  return pjrt_client_->LookupDevice(device_id);
 +}
 +
-+absl::StatusOr<ifrt::Device*> LegateIfrtClient::LookupAddressableDevice(
++absl::StatusOr<ifrt::Device*> MultimeshIfrtClient::LookupAddressableDevice(
 +    int local_hardware_id) const {
 +  return pjrt_client_->LookupAddressableDevice(local_hardware_id);
 +}
 +
-+ifrt::Compiler* LegateIfrtClient::GetDefaultCompiler() { return &compiler_; }
++ifrt::Compiler* MultimeshIfrtClient::GetDefaultCompiler() { return &compiler_; }
 +
 +absl::StatusOr<std::shared_ptr<ifrt::Topology>>
-+LegateIfrtClient::GetTopologyForDevices(
++MultimeshIfrtClient::GetTopologyForDevices(
 +    const tsl::RCReference<xla::ifrt::DeviceList>& devices) const {
 +  return pjrt_client_->GetTopologyForDevices(devices);
 +}
 +
 +}  // namespace xla
-diff --git a/xla/python/ifrt/legate/legate_ifrt_client.h b/xla/python/ifrt/legate/legate_ifrt_client.h
+diff --git a/xla/python/ifrt/multimesh/multimesh_ifrt_client.h b/xla/python/ifrt/multimesh/multimesh_ifrt_client.h
 new file mode 100644
-index 0000000000..03afeaa098
+index 0000000000..6295114058
 --- /dev/null
-+++ b/xla/python/ifrt/legate/legate_ifrt_client.h
-@@ -0,0 +1,342 @@
-+/* Copyright 2022 The TensorFlow Authors. All Rights Reserved.
-+
-+Licensed under the Apache License, Version 2.0 (the "License");
-+you may not use this file except in compliance with the License.
-+You may obtain a copy of the License at
-+
-+    http://www.apache.org/licenses/LICENSE-2.0
-+
-+Unless required by applicable law or agreed to in writing, software
-+distributed under the License is distributed on an "AS IS" BASIS,
-+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+See the License for the specific language governing permissions and
-+limitations under the License.
-+==============================================================================*/
-+
-+#ifndef XLA_PJRT_LEGATE_LEGATE_IFRT_CLIENT_H_
-+#define XLA_PJRT_LEGATE_LEGATE_IFRT_CLIENT_H_
++++ b/xla/python/ifrt/multimesh/multimesh_ifrt_client.h
+@@ -0,0 +1,332 @@
++/* clang-format off
++ * SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++ * SPDX-License-Identifier: Apache-2.0
++ */
++#ifndef XLA_PYTHON_IFRT_MULTIMESH_IFRT_CLIENT_H_
++#define XLA_PYTHON_IFRT_MULTIMESH_IFRT_CLIENT_H_
 +
 +#include <cstddef>
 +#include <cstdint>
@@ -3941,13 +3841,13 @@ index 0000000000..03afeaa098
 +  Copy = 6,
 +};
 +
-+class LegateIfrtClient;
-+class LegateIfrtArray
-+    : public llvm::RTTIExtends<LegateIfrtArray, ifrt::PjRtCompatibleArray> {
++class MultimeshIfrtClient;
++class MultimeshIfrtArray
++    : public llvm::RTTIExtends<MultimeshIfrtArray, ifrt::PjRtCompatibleArray> {
 + public:
-+  LegateIfrtArray(LegateIfrtClient* client,
-+                  tsl::RCReference<ifrt::Array> wrapped, ArrayOrigin origin,
-+                  std::optional<std::string> name = std::nullopt);
++  MultimeshIfrtArray(MultimeshIfrtClient* client,
++                     tsl::RCReference<ifrt::Array> wrapped, ArrayOrigin origin,
++                     std::optional<std::string> name = std::nullopt);
 +
 +  ifrt::Client* client() const override;
 +
@@ -4008,16 +3908,17 @@ index 0000000000..03afeaa098
 +  std::string name() const;
 +
 + private:
-+  LegateIfrtClient* client_;
++  MultimeshIfrtClient* client_;
 +  tsl::RCReference<ifrt::Array> wrapped_;
 +  ArrayOrigin origin_;
 +  std::optional<std::string> name_;
 +};
 +
-+class LegateLoadedExecutable : public ifrt::LoadedExecutable {
++class MultiMeshLoadedExecutable : public ifrt::LoadedExecutable {
 + public:
-+  explicit LegateLoadedExecutable(
-+      LegateIfrtClient* client, std::unique_ptr<ifrt::LoadedExecutable> wrapped,
++  explicit MultiMeshLoadedExecutable(
++      MultimeshIfrtClient* client,
++      std::unique_ptr<ifrt::LoadedExecutable> wrapped,
 +      std::vector<std::shared_ptr<const PjRtLayout>> parameter_layouts,
 +      std::vector<std::shared_ptr<const PjRtLayout>> output_layouts,
 +      std::optional<std::vector<OpSharding>> parameter_shardings,
@@ -4075,7 +3976,7 @@ index 0000000000..03afeaa098
 +  absl::Span<ifrt::Device* const> addressable_devices() const override;
 +
 + private:
-+  LegateIfrtClient* client_;
++  MultimeshIfrtClient* client_;
 +  std::unique_ptr<ifrt::LoadedExecutable> exe_;
 +  std::vector<std::shared_ptr<const PjRtLayout>> parameter_layouts_;
 +  std::vector<std::shared_ptr<const PjRtLayout>> output_layouts_;
@@ -4083,11 +3984,11 @@ index 0000000000..03afeaa098
 +  std::optional<std::vector<OpSharding>> output_shardings_;
 +};
 +
-+class LegateIfrtCompiler : public ifrt::Compiler {
++class MultimeshIfrtCompiler : public ifrt::Compiler {
 + public:
-+  explicit LegateIfrtCompiler(LegateIfrtClient* legate_client,
-+                              ifrt::PjRtClient* pjrt_client)
-+      : client_(legate_client), wrapped_(pjrt_client) {}
++  explicit MultimeshIfrtCompiler(MultimeshIfrtClient* mm_client,
++                                 ifrt::PjRtClient* pjrt_client)
++      : client_(mm_client), wrapped_(pjrt_client) {}
 +
 +  static std::unique_ptr<ifrt::Compiler> Create(
 +      std::unique_ptr<ifrt::Compiler> wrapped);
@@ -4106,16 +4007,16 @@ index 0000000000..03afeaa098
 +      std::unique_ptr<ifrt::DeserializeExecutableOptions> options) override;
 +
 + private:
-+  LegateIfrtClient* client_;
++  MultimeshIfrtClient* client_;
 +  ifrt::PjRtCompiler wrapped_;
 +};
 +
-+class LegateIfrtClient : public ifrt::Client {
++class MultimeshIfrtClient : public ifrt::Client {
 + public:
 +  static absl::StatusOr<std::unique_ptr<ifrt::Client>> Create(
 +      std::unique_ptr<xla::PjRtClient> client) {
 +    return std::unique_ptr<ifrt::Client>(
-+        new LegateIfrtClient(ifrt::PjRtClient::Create(std::move(client))));
++        new MultimeshIfrtClient(ifrt::PjRtClient::Create(std::move(client))));
 +  }
 +
 +  static absl::StatusOr<std::unique_ptr<ifrt::Client>> Create(
@@ -4123,10 +4024,10 @@ index 0000000000..03afeaa098
 +    TF_ASSIGN_OR_RETURN(auto pjrt_client,
 +                        ifrt::PjRtClient::Create(std::move(options)));
 +    return std::unique_ptr<ifrt::Client>(
-+        new LegateIfrtClient(std::move(pjrt_client)));
++        new MultimeshIfrtClient(std::move(pjrt_client)));
 +  }
 +
-+  explicit LegateIfrtClient(std::unique_ptr<ifrt::PjRtClient> client);
++  explicit MultimeshIfrtClient(std::unique_ptr<ifrt::PjRtClient> client);
 +
 +  const ifrt::AttributeMap& Attributes() const override;
 +
@@ -4222,13 +4123,12 @@ index 0000000000..03afeaa098
 +
 + private:
 +  std::unique_ptr<ifrt::PjRtClient> pjrt_client_;
-+  LegateIfrtCompiler compiler_;
++  MultimeshIfrtCompiler compiler_;
 +};
 +
 +}  // namespace xla
 +
-+#endif  // XLA_PJRT_LEGATE_LEGATE_IFRT_CLIENT_H_
-\ No newline at end of file
++#endif  // XLA_PYTHON_IFRT_MULTIMESH_IFRT_CLIENT_H_
 diff --git a/xla/python/pjrt_ifrt/pjrt_executable.cc b/xla/python/pjrt_ifrt/pjrt_executable.cc
 index 4834ddadfa..7c5c569bec 100644
 --- a/xla/python/pjrt_ifrt/pjrt_executable.cc
@@ -4441,14 +4341,14 @@ index a142a40af1..cf908964ec 100644
        return absl::StrCat(
            "aval=", nb::cast<absl::string_view>(nb::repr(py_array.aval())),
 diff --git a/xla/python/xla.cc b/xla/python/xla.cc
-index 1890f82b92..b5f0bbd852 100644
+index 1890f82b92..e44a854079 100644
 --- a/xla/python/xla.cc
 +++ b/xla/python/xla.cc
 @@ -86,6 +86,7 @@ limitations under the License.
  
  #include "xla/pjrt/distributed/key_value_store_interface.h"
  #include "xla/pjrt/exceptions.h"
-+#include "xla/python/ifrt/legate/legate_ifrt_client.h"
++#include "xla/python/ifrt/multimesh/multimesh_ifrt_client.h"
  #include "xla/pjrt/pjrt_api.h"
  #include "xla/pjrt/pjrt_c_api_client.h"
  #include "xla/pjrt/pjrt_client.h"
@@ -4466,7 +4366,7 @@ index 1890f82b92..b5f0bbd852 100644
            }
            ifrt_client =
 -              ValueOrThrow(ifrt::PjRtClient::Create(std::move(ifrt_options)));
-+              ValueOrThrow(LegateIfrtClient::Create(std::move(ifrt_options)));
++              ValueOrThrow(MultimeshIfrtClient::Create(std::move(ifrt_options)));
          }
          return PyClient::Make(std::move(ifrt_client));
        },
@@ -4485,7 +4385,7 @@ index 1890f82b92..b5f0bbd852 100644
                GetCApiClient(platform_name, options, kv_store));
 -          ifrt_client = ifrt::PjRtClient::Create(std::move(c_api_client));
 +          ifrt_client = xla::ValueOrThrow(
-+              LegateIfrtClient::Create(std::move(c_api_client)));
++              MultimeshIfrtClient::Create(std::move(c_api_client)));
          }
 +
          return PyClient::Make(std::move(ifrt_client));

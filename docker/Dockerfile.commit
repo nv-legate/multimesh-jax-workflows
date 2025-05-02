@@ -2,7 +2,7 @@ ARG COMMIT_IMAGE
 FROM ${COMMIT_IMAGE} AS commit
 
 COPY workspace/jax /opt/workspace/jax
-COPY workspace/legate-jax /opt/workspace/legate-jax
+COPY workspace/multimesh-jax /opt/workspace/multimesh-jax
 
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]

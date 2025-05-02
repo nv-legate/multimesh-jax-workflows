@@ -26,7 +26,7 @@ intra_node_rank=$(( RANK % 8 ))
 cpu_binding="${cpus[$intra_node_rank]}"
 mem_binding="${mems[$intra_node_rank]}"
 
-export LEGATE_XLA_HOIST_CONVERT=1
+export MULTIMESH_HOIST_CONVERT=1
 
 $nsys_cmd \
 numactl --physcpubind $cpu_binding \
@@ -59,5 +59,5 @@ python `pwd`/run.py \
     --no-sequence-parallel \
     --autoshard \
     --num-steps 8 \
-    --backend legate \
+    --backend multimesh \
     --debug info >& ${RANK}.out

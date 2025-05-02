@@ -213,7 +213,7 @@
         {
             "id": "dev_image",
             "description": "The image name to run",
-            "default": "legate-jax-dev:maxtext-devel",
+            "default": "multimesh-jax-dev:maxtext-devel",
             "type": "promptString"
         },
         {

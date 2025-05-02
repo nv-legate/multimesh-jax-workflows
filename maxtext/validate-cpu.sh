@@ -35,5 +35,5 @@ python ./run.py \
    --use-nccl-comm-split \
    --dump dump \
    --autoshard \
-   --backend legate \
+   --backend multimesh \
    --debug info

@@ -117,15 +117,15 @@ COPY \
    configure-realm.sh build-realm.sh install-realm.sh \
    configure-zuku.sh build-zuku.sh \
    configure-xla.sh xla-compile-commands.sh \
-   configure-legate-jax.sh build-legate-jax.sh install-legate-jax.sh \
+   configure-multimesh-jax.sh build-multimesh-jax.sh install-multimesh-jax.sh \
    startup-devcontainer.sh \
    /opt
 
 FROM devcontainer_base AS setup_realm
-ARG LEGATE_BUILD_TYPE=Release
+ARG BUILD_TYPE=Release
 COPY workspace/realm /opt/workspace/realm
 RUN --mount=type=cache,target=/ccache/realm \
-  /opt/configure-realm.sh ${LEGATE_BUILD_TYPE} ${BUILD_BASE_DIR}/realm ${LIB_DIR}
+  /opt/configure-realm.sh ${BUILD_TYPE} ${BUILD_BASE_DIR}/realm ${LIB_DIR}
 
 FROM setup_realm AS build_realm
 RUN --mount=type=cache,target=/ccache/realm \
@@ -140,7 +140,7 @@ FROM editable_install_realm AS setup_zuku
 COPY workspace/zuku /opt/workspace/zuku
 RUN --mount=type=cache,target=/ccache/zuku \
     --mount=type=bind,from=build_realm,source=${BUILD_BASE_DIR}/realm,target=${BUILD_BASE_DIR}/realm \
-  /opt/configure-zuku.sh ${LEGATE_BUILD_TYPE} ${BUILD_BASE_DIR}/zuku ${BUILD_BASE_DIR}/realm ${LIB_DIR}
+  /opt/configure-zuku.sh ${BUILD_TYPE} ${BUILD_BASE_DIR}/zuku ${BUILD_BASE_DIR}/realm ${LIB_DIR}
 
 FROM setup_zuku AS build_zuku
 RUN --mount=type=cache,target=/ccache/zuku \
@@ -154,23 +154,23 @@ RUN --mount=type=cache,target=/ccache/zuku \
   /opt/build-zuku.sh ${BUILD_BASE_DIR}/zuku
 
 FROM ${JAX_PLUGIN_BASE} AS setup_jax_plugin
-COPY workspace/legate-jax /opt/workspace/legate-jax
+COPY workspace/multimesh-jax /opt/workspace/multimesh-jax
 COPY workspace/xla /opt/workspace/xla
 RUN /opt/configure-xla.sh \
-    && /opt/configure-legate-jax.sh ${LEGATE_BUILD_TYPE} ${BUILD_BASE_DIR}/legate-jax ${BUILD_BASE_DIR}/realm ${BUILD_BASE_DIR}/zuku ${LIB_DIR} ${BAZEL_CACHE}
+    && /opt/configure-multimesh-jax.sh ${BUILD_TYPE} ${BUILD_BASE_DIR}/multimesh-jax ${BUILD_BASE_DIR}/realm ${BUILD_BASE_DIR}/zuku ${LIB_DIR} ${BAZEL_CACHE}
 
 FROM setup_jax_plugin AS build_jax_plugin
-RUN --mount=type=cache,target=/ccache/legate-jax \
+RUN --mount=type=cache,target=/ccache/multimesh-jax \
     --mount=type=cache,from=build_realm,source=${BUILD_BASE_DIR}/realm,target=${BUILD_BASE_DIR}/realm \
     --mount=type=cache,from=build_zuku,source=${BUILD_BASE_DIR}/zuku,target=${BUILD_BASE_DIR}/zuku \
-    /opt/build-legate-jax.sh ${BUILD_BASE_DIR}/legate-jax
+    /opt/build-multimesh-jax.sh ${BUILD_BASE_DIR}/multimesh-jax
 
 FROM setup_jax_plugin AS editable_install_jax_plugin
-RUN --mount=type=cache,from=build_jax_plugin,source=${BUILD_BASE_DIR}/legate-jax,target=${BUILD_BASE_DIR}/legate-jax \
+RUN --mount=type=cache,from=build_jax_plugin,source=${BUILD_BASE_DIR}/multimesh-jax,target=${BUILD_BASE_DIR}/multimesh-jax \
   --mount=type=cache,from=build_jax_plugin,source=/opt/workspace/xla,target=/opt/workspace/xla \
   --mount=type=cache,from=build_jax_plugin,source=/root/.cache/bazel,target=/root/.cache/bazel \
-    /opt/build-legate-jax.sh ${BUILD_BASE_DIR}/legate-jax \
-    && /opt/install-legate-jax.sh ${BUILD_BASE_DIR}/legate-jax .
+    /opt/build-multimesh-jax.sh ${BUILD_BASE_DIR}/multimesh-jax \
+    && /opt/install-multimesh-jax.sh ${BUILD_BASE_DIR}/multimesh-jax .
 
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]

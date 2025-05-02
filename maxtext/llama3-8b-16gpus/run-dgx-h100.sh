@@ -60,7 +60,7 @@ python /workspace/cwd/run.py \
     --schedule prefetch-wavefront \
     --autoshard \
     --num-steps 10 \
-    --backend legate \
+    --backend multimesh \
     --debug info \
     -logfile jax_%.log \
     >& ${RANK}.out

@@ -142,7 +142,7 @@ parser.add_argument(
     type=str,
     choices=["Release", "Debug", "RelWithDebInfo"],
     default="Release",
-    help="The type of CMake build to execute for Legate repos",
+    help="The type of CMake build to execute for repos",
 )
 
 parser.add_argument(
@@ -169,7 +169,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 dockerfile = "Dockerfile"
-short_image_name = "legate-jax-dev"
+short_image_name = "multimesh-jax-dev"
 
 tag = args.tag or args.stage or args.framework
 image_name = f"{short_image_name}:{tag}"
@@ -224,7 +224,7 @@ try:
             cmds.append("BAZEL_CACHE=")
 
         for arg, value in (
-            ("LEGATE_BUILD_TYPE", args.build_type),
+            ("BUILD_TYPE", args.build_type),
             ("CUDA_VERSION", args.cuda_version),
             ("CUDNN_VERSION", args.cudnn_version),
             ("FRAMEWORK", args.framework),

@@ -1,7 +1,7 @@
-# Running MaxText with Legate-Jax
+# Running MaxText with MultiMesh
 
 This folder contains scripts that illustrate running [MaxText](https://github.com/AI-Hypercomputer/maxtext)
-with the Legate-Jax library and plugin.  The `run.py` script
+with the MultiMesh library and plugin.  The `run.py` script
 encapsulates the numerous, numerous config options for running
 MaxText and tries to provide them as documented flags for the script.
 Most critically, it provides `--dp`, `--fsdp`, `--pp`, and `--tp`
