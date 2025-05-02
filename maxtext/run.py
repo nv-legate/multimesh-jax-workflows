@@ -757,7 +757,7 @@ argv = [
     f"per_device_batch_size={per_device_batch_size}",
     "monitor_goodput=False",
     "enable_goodput_recording=False",
-    "enable_tensorboard=False",
+    "enable_tensorboard=True",
 ]
 
 if args.model_name is None:
