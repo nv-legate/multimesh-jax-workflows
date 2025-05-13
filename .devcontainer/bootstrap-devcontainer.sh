@@ -7,9 +7,11 @@ mkdir -p ~/.cache/ccache/multimesh-jax
 topdir=$1
 # convert the submodules into full directories
 for folder in "xla" "multimesh-jax" "jax" "realm" "zuku"; do
-  pushd $topdir
-  git submodule update --init --recursive -- docker/workspace/$folder
-  popd
+  if [ ! -d "$folder" ]; then
+    pushd $topdir
+    git submodule update --init --recursive -- docker/workspace/$folder
+    popd
+  fi
 done
 
 pushd $topdir/docker
