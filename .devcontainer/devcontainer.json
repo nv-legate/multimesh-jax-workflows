@@ -14,7 +14,7 @@
   "workspaceMount": "source=${localWorkspaceFolder}/docker/workspace,target=/opt/workspace,type=bind",
   "workspaceFolder": "/opt/workspace",
   "initializeCommand": "${localWorkspaceFolder}/.devcontainer/bootstrap-devcontainer.sh ${localWorkspaceFolder}",
-  "postCreateCommand": "/opt/startup-devcontainer.sh",
+  "postCreateCommand": "/opt/scripts/devcontainer/startup.sh",
   "runArgs": [
     "--name",
     "${localWorkspaceFolderBasename}_realm_jax_devcontainer",

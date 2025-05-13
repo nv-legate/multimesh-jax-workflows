@@ -6,9 +6,13 @@ pushd /opt/workspace/zuku
 
 export CCACHE_DIR=/zuku-ccache
 BUILD_TYPE=$1
-BUILD_DIR=$2
-REALM_DIR=$3
-LIB_DIR=$4
+BUILD_DIR=/opt/build/zuku
+LIB_DIR=/opt/lib
+REALM_BUILD_DIR=${2:-}
+
+if [ -d /opt/build/realm ]; then
+  realm_dir_flag="-DLegion_ROOT=/opt/build/realm"
+fi
 
 conda run --no-capture-out -n legere \
   cmake -S . -B ${BUILD_DIR} \
@@ -25,7 +29,7 @@ conda run --no-capture-out -n legere \
   -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
   -DCMAKE_LIBRARY_PATH:STRING=/usr/lib/x86_64-linux-gnu -DCMAKE_CXX_STANDARD:STRING=17 \
   -DBUILD_SHARED_LIBS:BOOL=ON \
-  -DLegion_ROOT:PATH=${REALM_DIR} \
+  $realm_dir_flag \
   -DCMAKE_INSTALL_RPATH:PATH=/opt/install/miniconda/envs/legere/lib \
   -DCMAKE_INSTALL_PREFIX:PATH=/opt/install/miniconda/envs/legere
 

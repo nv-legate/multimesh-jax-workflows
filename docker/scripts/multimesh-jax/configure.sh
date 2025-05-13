@@ -5,14 +5,21 @@ set -e
 pushd /opt/workspace/multimesh-jax
 
 BUILD_TYPE=$1
-BUILD_DIR=$2
-REALM_DIR=$3
-ZUKU_DIR=$4
-LIB_DIR=$5
-BAZEL_CACHE=$6
+BAZEL_CACHE=$2
+BUILD_DIR=/opt/build/multimesh-jax
+LIB_DIR=/opt/lib
 export CCACHE_DIR=/jax-plugin-ccache
 
 mkdir -p /opt/lib/multimesh-jax
+
+if [ -d /opt/build/zuku ]; then
+  zuku_dir_flag="-Dzuku_ROOT=/opt/build/zuku"
+fi
+
+if [ -d /opt/build/realm ]; then
+  realm_dir_flag="-DLegion_ROOT=/opt/build/realm"
+fi
+
 
 conda run --no-capture-out -n legere cmake -S . -B ${BUILD_DIR} \
   -DMultiMeshJAX_RAPIDS_DIR=/opt/rapids-cmake \
@@ -30,10 +37,10 @@ conda run --no-capture-out -n legere cmake -S . -B ${BUILD_DIR} \
   -DMultiMeshJAX_BAZEL_REMOTE_CACHE:STRING="${BAZEL_CACHE}" \
   -DBUILD_SHARED_LIBS:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Release \
   -DCPM_xla_SOURCE:PATH=/opt/workspace/xla \
-  -Dzuku_ROOT:PATH=${ZUKU_DIR} \
-  -DLegion_ROOT:PATH=${REALM_DIR} \
   -Dzuku_SOURCE_DIR=/opt/workspace/zuku \
   -DMultiMeshJAX_ASAN:BOOL=OFF \
+  $zuku_dir_flag \
+  $realm_dir_flag \
   -DCMAKE_INSTALL_RPATH:PATH=/opt/install/miniconda/envs/legere/lib \
   -DCMAKE_INSTALL_PREFIX:PATH=/opt/install/miniconda/envs/legere
 

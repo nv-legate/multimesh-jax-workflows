@@ -1,18 +1,18 @@
 #! /usr/bin/env bash
 
-wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py38_4.12.0-Linux-x86_64.sh -O /opt/minforge.sh
-/bin/bash /opt/minforge.sh -b -p /opt/install/miniconda
+/bin/bash /opt/conda/miniforge.sh -b -p /opt/install/miniconda
+
+export PATH=$PATH:/opt/install/miniconda/bin
+
 conda update --all --yes
 conda clean -tipy
-rm -f /opt/minforge.sh
+
 echo "auto_update_conda: False" >> /opt/install/miniconda/.condarc
 echo "ssl_verify: False" >> /opt/install/miniconda/.condarc
 echo ". /opt/install/miniconda/etc/profile.d/conda.sh" >> /etc/skel/.bashrc
 ln -s /opt/install/miniconda/etc/profile.d/conda.sh /etc/profile.d/conda.sh
 echo ". /opt/install/miniconda/etc/profile.d/conda.sh" >> /root/.bashrc
 echo "conda activate base" >> /root/.bashrc
-
-export PATH=$PATH:/opt/install/miniconda/bin
 
 conda install -k -y tini
 chmod -R ugo+w /opt/install/miniconda
@@ -24,12 +24,7 @@ echo "conda activate legere" >> /root/.bashrc
 
 conda run --no-capture-out -n legere \
   conda install -c conda-forge -y \
-    python==3.10.6 \
-    cmake \
-    ccache \
+    python==3.12 \
+    cmake==3.31 \
     openssh
 
-conda run --no-capture-out -n legere \
-  python -m pip install build numpy \
-  pybind11 pybind11-global scikit-build \
-  tensorflow typing_extensions

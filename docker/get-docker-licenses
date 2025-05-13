@@ -1,0 +1,141 @@
+#! /usr/bin/env python
+
+import argparse
+import io
+import json
+import os
+import subprocess as sp
+from pathlib import Path
+
+import pandas as pd
+import pip
+
+
+def get_conda():
+    output = sp.check_output(["conda", "list"]).decode("utf-8")
+    conda_meta = Path(os.environ["CONDA_PREFIX"]) / "conda-meta"
+    meta_files = os.listdir(conda_meta)
+
+    versions = []
+    licenses = []
+    names = []
+    for line in output.splitlines()[3:]:
+        if "pypi" in line:
+            continue
+        name, version, hsh, source = line.strip().split()
+        license = "unknown"
+        for m in meta_files:
+            if name in m:
+                with open(conda_meta / m) as f:
+                    data = json.load(f)
+                    license = data["license"] or "unknown"
+                break
+        names.append(name)
+        licenses.append(license)
+        versions.append(version)
+
+    data = dict(
+        name=names,
+        version=versions,
+        license=licenses,
+    )
+
+    df = pd.DataFrame(data)
+    df["source"] = "conda-forge"
+    return df
+
+
+def get_pip():
+    pip.main(["install", "pip-licenses"])
+    csv = sp.check_output(["pip-licenses", "-f", "csv"]).decode("utf-8")
+    df = pd.read_csv(io.StringIO(csv))
+    df.columns = ["name", "version", "license"]
+    df["source"] = "PyPI"
+    return df
+
+
+def get_apt(output: str = None, base: str = None, dpkg: str = None):
+    if dpkg is None:
+        raise ValueError("must have dpkg-licenses repo path")
+    if output is None:
+        output = sp.check_output([f"{dpkg}/dpkg-licenses", "--csv"]).decode(
+            "utf-8"
+        )  # noqa: E501
+    else:
+        output = open(output).read()
+
+    base_pkgs = set()
+    if base:
+        for line in open(base):
+            pkg = line.split("/")[0].split(":")[0]
+            base_pkgs.add(pkg)
+
+    df = pd.read_csv(io.StringIO(output))
+    df = df.drop(["St", "Arch", "Description"], axis=1)
+    df.columns = ["name", "version", "license"]
+    df["name"] = df["name"].apply(lambda x: x.split(":")[0])
+    df["source"] = "apt"
+
+    if base_pkgs:
+        valid = df["name"].apply(lambda x: x not in base_pkgs)
+        df = df[valid]
+    print(df)
+    return df
+
+
+parser = argparse.ArgumentParser(allow_abbrev=False)
+
+parser.add_argument(
+    "--conda", action=argparse.BooleanOptionalAction, default=True
+)  # noqa: E501
+
+parser.add_argument(
+    "--pip", action=argparse.BooleanOptionalAction, default=True
+)  # noqa: E501
+
+parser.add_argument(
+    "--apt", action=argparse.BooleanOptionalAction, default=True
+)  # noqa: E501
+
+parser.add_argument(
+    "--apt-output",
+    type=str,
+    default=None,
+    help="path to file containing dpkg-license output",
+)  # noqa: E501
+
+parser.add_argument(
+    "--dpkg-repo", type=str, default=None, help="path to dpkg-license repo"
+)  # noqa: E501
+
+parser.add_argument(
+    "--apt-base",
+    type=str,
+    default=None,
+    help="path containing 'apt list --installed' for base image to omit",
+)
+
+parser.add_argument(
+    "--to-csv",
+    type=str,
+    default=None,
+    help="path to dump CSV output to",
+)
+
+args = parser.parse_args()
+
+frames = []
+
+if args.pip:
+    frames.append(get_pip())
+if args.conda:
+    frames.append(get_conda())
+if args.apt:
+    df = get_apt(output=args.apt_output, base=args.apt_base, dpkg=args.dpkg_repo)
+    frames.append(df)
+
+df = pd.concat(frames)
+if args.to_csv:
+    df.to_csv(args.to_csv)
+else:
+    print(df)

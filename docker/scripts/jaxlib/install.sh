@@ -2,7 +2,7 @@
 
 set -e
 
-BUILD_DIR=$1
+BUILD_DIR=/opt/build/jaxlib
 
 pushd $BUILD_DIR
 conda run --no-capture-out -n legere python -m pip install *.whl --force-reinstall --no-deps

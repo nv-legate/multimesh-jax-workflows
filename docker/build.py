@@ -4,17 +4,16 @@
 #                         All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import sys
 import argparse
 import json
 import os
 import subprocess as sp
+import sys
 from pathlib import Path
-
+from subprocess import CalledProcessError
 
 import yaml
 from subprocess_tee import run
-from subprocess import CalledProcessError
 
 try:
     from eos_workflows import (
@@ -37,12 +36,6 @@ parser = argparse.ArgumentParser(allow_abbrev=False)
 parser.add_argument(
     "--cache", action=argparse.BooleanOptionalAction, default=True
 )  # noqa: E501
-
-parser.add_argument(
-    "--base-image",
-    type=str,
-    default="maxtext_base",
-)
 
 parser.add_argument(
     "--framework",
@@ -228,7 +221,6 @@ try:
             ("CUDA_VERSION", args.cuda_version),
             ("CUDNN_VERSION", args.cudnn_version),
             ("FRAMEWORK", args.framework),
-            ("BASE_NAME", args.base_image),
         ):
             cmds.append("--build-arg")
             cmds.append(f"{arg}={value}")

@@ -4,8 +4,7 @@ set -e
 
 pushd /opt/workspace/jax
 
-BUILD_DIR=$1
-BAZEL_CACHE=$2
+BAZEL_CACHE=$1
 
 export PYTHON_BIN_PATH=/opt/install/miniconda/envs/legere/bin/python
 export USE_DEFAULT_PYTHON_LIB_PATH=1
