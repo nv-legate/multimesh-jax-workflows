@@ -6,13 +6,13 @@ mkdir -p ~/.cache/ccache/multimesh-jax
 
 topdir=$1
 # convert the submodules into full directories
+pushd $topdir
 for folder in "xla" "multimesh-jax" "jax" "realm" "zuku"; do
-  if [ ! -d "$folder" ]; then
-    pushd $topdir
+  if [ ! -d "docker/workspace/$folder" ]; then
     git submodule update --init --recursive -- docker/workspace/$folder
-    popd
   fi
 done
+popd
 
 pushd $topdir/docker
 ./apply-patches.sh
