@@ -21,22 +21,33 @@ git config --global --add safe.directory /opt/workspace/zuku
 pushd /opt/workspace/realm
 /opt/scripts/realm/configure.sh ${BUILD_TYPE}
 /opt/scripts/realm/build.sh
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 popd
 
 pushd /opt/workspace/zuku
 /opt/scripts/zuku/configure.sh ${BUILD_TYPE}
 /opt/scripts/zuku/build.sh
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 popd
 
 pushd /opt/workspace/xla
 /opt/scripts/multimesh-jax/configure-xla.sh
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 popd
 
 pushd /opt/workspace/multimesh-jax
 /opt/scripts/multimesh-jax/configure.sh ${BUILD_TYPE} ${BAZEL_CACHE}
 /opt/scripts/multimesh-jax/build.sh
 /opt/scripts/multimesh-jax/install.sh
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 popd
+
+cd ~/
+wget https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash
+# set up git completion
+echo "source git-completion.bash" >> .bashrc
+# ignore annoying lldb error
+echo "settings set target.disable-aslr false" >> .lldbinit
 
 pushd /opt/workspace/xla
 #/opt/xla-compile-commands.sh
