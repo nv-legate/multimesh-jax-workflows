@@ -189,6 +189,10 @@ RUN --mount=type=cache,from=build_multimesh_plugin,source=/opt/build/multimesh-j
   --mount=type=cache,from=build_multimesh_plugin,source=/root/.cache/bazel,target=/root/.cache/bazel \
     /opt/workspace/multimesh-jax/install.sh
 
+FROM install_multimesh_plugin
+RUN --mount=type=bind,source=scripts/tools,target=/opt/scripts/tools \
+  /opt/scripts/tools/install.sh
+
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]
 CMD [ "/bin/bash" ]

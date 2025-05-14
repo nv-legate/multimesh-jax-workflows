@@ -4,6 +4,9 @@ FROM ${COMMIT_IMAGE} AS commit
 COPY workspace/jax /opt/workspace/jax
 COPY workspace/multimesh-jax /opt/workspace/multimesh-jax
 
+RUN --mount=type=bind,source=scripts/tools,target=/opt/scripts/tools \
+  /opt/scripts/tools/install.sh nsys
+
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]
 CMD [ "/bin/bash" ]
