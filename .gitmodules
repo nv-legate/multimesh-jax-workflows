@@ -34,7 +34,7 @@
   shallow = true
 [submodule "docker/workspace/zuku"]
   path = docker/workspace/zuku
-  url = ssh://git@github.com/nv-legate/zuku.internal.git
+  url = git@github.com:nv-legate/zuku.internal.git
   shallow = true
 [submodule "docker/workspace/xla"]
   path = docker/workspace/xla
