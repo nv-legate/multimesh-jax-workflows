@@ -96,8 +96,8 @@ To run an example job in the container locally, example scripts are included in 
 A [script](maxtext/validate-gpu.sh) for running a small job with TP=2 is included.
 The container can be launched from the top-level directory as:
 
-```
-docker run \
+```bash
+multimesh-jax-workflows $ docker run \
   --cap-add SYS_ADMIN \
   --entrypoint /opt/entrypoint.sh \
   --net=host \
@@ -115,8 +115,8 @@ A [script](maxtext/validate-cpu.sh) for running a small job with DP=2, PP=2, TP=
 Currently the container requires CUDA present even if running a
 CPU-only job. To launch the job:
 
-```
-docker run \
+```bash
+multimesh-jax-workflows $ docker run \
   --cap-add SYS_ADMIN \
   --entrypoint /opt/entrypoint.sh \
   --net=host \
