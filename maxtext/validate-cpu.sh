@@ -14,7 +14,7 @@ python ./run.py \
    --cpus 8 \
    --gpus 0 \
    --fbmem 0 \
-   --sysmem 25 \
+   --sysmem 5 \
    --nodes 1 \
    --dp 2 \
    --tp 2 \

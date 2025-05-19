@@ -1,0 +1,13 @@
+diff --git a/runtime/CMakeLists.txt b/runtime/CMakeLists.txt
+index 6c1489382a..5eb9281a88 100644
+--- a/runtime/CMakeLists.txt
++++ b/runtime/CMakeLists.txt
+@@ -560,7 +560,7 @@ if(Legion_USE_CUDA)
+   target_link_libraries(RealmRuntime PUBLIC CUDA::toolkit)
+   target_link_libraries(RealmStatic PUBLIC CUDA::toolkit)
+   # Advertise our driver link to Realm consumers while ensuring libcuda.so isn't in Realm's RPATH
+-  target_link_libraries(RealmRuntime INTERFACE CUDA::cuda_driver)
++  #target_link_libraries(RealmRuntime INTERFACE CUDA::cuda_driver)
+   target_link_libraries(RealmStatic INTERFACE CUDA::cuda_driver)
+   # for backwards compatibility in applications
+   target_compile_definitions(RealmRuntime INTERFACE USE_CUDA)

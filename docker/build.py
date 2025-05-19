@@ -156,13 +156,20 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--name",
+    type=str,
+    default="multimesh-jax-dev",
+    help="The name of the image: <name>:<tag>",
+)  # noqa: E501
+
+parser.add_argument(
     "--upload", action=argparse.BooleanOptionalAction, default=False
 )  # noqa: E501
 
 args = parser.parse_args()
 
 dockerfile = "Dockerfile"
-short_image_name = "multimesh-jax-dev"
+short_image_name = args.name
 
 tag = args.tag or args.stage or args.framework
 image_name = f"{short_image_name}:{tag}"

@@ -32,6 +32,8 @@ conda run --no-capture-out -n legere python configure.py \
 
 python_version=$(/opt/install/miniconda/envs/legere/bin/python --version | awk '{print $2}' | cut -d . -f 1-2)
 echo "build --repo_env HERMETIC_PYTHON_VERSION=${python_version}" >> xla_configure.bazelrc
+echo "build:cuda --@local_config_cuda//cuda:include_cuda_libs=false" >> xla_configure.bazelrc
+echo "build:cuda_libraries_from_stubs --@local_config_cuda//cuda:include_cuda_libs=false" >> xla_configure.bazelrc
 
 popd
 

@@ -4,6 +4,7 @@
     "source=${localWorkspaceFolder}/.git,target=/.git,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/docker/workspace/build,target=/opt/build,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/docker/workspace/bazel,target=/root/.cache/bazel,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/docker/scripts,target=/opt/scripts,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.cache/ccache/realm,target=/ccache/realm,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.cache/ccache/zuku,target=/ccache/zuku,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.cache/ccache/multimesh-jax,target=/ccache/multimesh-jax,type=bind,consistency=cached",

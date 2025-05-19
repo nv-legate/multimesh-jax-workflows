@@ -120,7 +120,6 @@ RUN cd /opt/workspace/jax && \
 FROM reinstall_custom_jax AS devcontainer_base
 COPY cpm /opt/cpm
 COPY rapids-cmake /opt/rapids-cmake
-COPY scripts /opt/scripts
 
 FROM devcontainer_base AS devcontainer_test
 COPY workspace/xla /opt/workspace/xla
@@ -189,9 +188,9 @@ RUN --mount=type=cache,from=build_multimesh_plugin,source=/opt/build/multimesh-j
   --mount=type=cache,from=build_multimesh_plugin,source=/root/.cache/bazel,target=/root/.cache/bazel \
     /opt/workspace/multimesh-jax/install.sh
 
-FROM install_multimesh_plugin
+FROM install_multimesh_plugin AS final_image
 RUN --mount=type=bind,source=scripts/tools,target=/opt/scripts/tools \
-  /opt/scripts/tools/install.sh
+  /opt/scripts/tools/install.sh jupyter
 
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]
