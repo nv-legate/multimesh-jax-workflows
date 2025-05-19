@@ -7,6 +7,15 @@ occurring automatically. MultiMesh therefore enables pipeline parallelism to be 
 This repository provides a monorepo and associated workflows for creating a [MaxText](https://github.com/AI-Hypercomputer/maxtext)
 stack running with [MultiMesh](https://github.com/nv-legate/multimesh-jax).
 
+## Prebuilt Containers
+
+Prebuilt containers are published to the [MultiMesh Github container registry](https://github.com/nv-legate/multimesh-jax/pkgs/container/multimesh-jax).
+The most recent release can be pulled:
+
+```bash
+$ docker pull ghcr.io/nv-legate/multimesh-jax:v0.1.1
+```
+
 ## Docker Builds
 
 Instructions for building containers can be found [here](docker/README.md).
@@ -15,10 +24,11 @@ To do so, run the `./bootstrap.sh` script in the top folder.
 We recommend using the [build driver script](docker/build.py).
 For a full list of options, one can run `build.py --help`.
 
-The most common build option will be:
-
-```
-./build.py --tag <TAG> --upload --repo <REPO>
+The most common build workflow will be:
+```bash
+multimesh-jax-workflows$ ./bootstrap.sh
+multimesh-jax-workflows$ cd docker
+multimesh-jax-workflows/docker$ ./build.py --tag <TAG> --upload --repo <REPO>
 ```
 
 which builds an image named `<REPO>:<TAG>` and uploads it,
@@ -62,7 +72,7 @@ multimesh-jax-workflows/docker $ ./start-cache.sh
 A script for running [MaxText](maxtext/run.py) is included to simplify the process
 of tuning parameters. A full list of options can be required by running:
 
-```
+```bash
 multimesh-jax-workflows $ maxtext/run.py --help
 ```
 
@@ -98,14 +108,11 @@ The container can be launched from the top-level directory as:
 
 ```bash
 multimesh-jax-workflows $ docker run \
-  --cap-add SYS_ADMIN \
   --entrypoint /opt/entrypoint.sh \
-  --net=host \
-  --add-host=host.docker.internal:host-gateway \
   --mount type=bind,source="$(pwd)"/maxtext,target=/workspace \
   -w /workspace \
   --gpus 2 \
-  gitlab-master.nvidia.com:5005/legate/quickstart.internal/multimesh-jax-dev:maxtext \
+  ghcr.io/nv-legate/multimesh-jax:v0.1.1 \
   ./validate-gpu.sh
 ```
 
@@ -117,14 +124,10 @@ CPU-only job. To launch the job:
 
 ```bash
 multimesh-jax-workflows $ docker run \
-  --cap-add SYS_ADMIN \
   --entrypoint /opt/entrypoint.sh \
-  --net=host \
-  --add-host=host.docker.internal:host-gateway \
   --mount type=bind,source="$(pwd)"/maxtext,target=/workspace \
   -w /workspace \
-  --gpus 2 \
-  gitlab-master.nvidia.com:5005/legate/quickstart.internal/multimesh-jax-dev:maxtext \
+  ghcr.io/nv-legate/multimesh-jax:v0.1.1 \
   ./validate-cpu.sh
 ```
 
