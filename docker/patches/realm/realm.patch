@@ -10,3 +10,16 @@ index 6c1489382a..94c4adb417 100644
    target_link_libraries(RealmStatic INTERFACE CUDA::cuda_driver)
    # for backwards compatibility in applications
    target_compile_definitions(RealmRuntime INTERFACE USE_CUDA)
+diff --git a/runtime/realm/inst_layout.inl b/runtime/realm/inst_layout.inl
+index 465be72894..0b14ce1c38 100644
+--- a/runtime/realm/inst_layout.inl
++++ b/runtime/realm/inst_layout.inl
+@@ -113,7 +113,7 @@ namespace Realm {
+     InstanceLayout<N,T> *layout = new InstanceLayout<N,T>;
+     layout->bytes_used = 0;
+     // require 32B alignment of each instance piece for vectorizing goodness
+-    layout->alignment_reqd = 32;
++    layout->alignment_reqd = 64;
+     layout->space = is;
+
+     // if the index space is empty, all fields can use the same empty
