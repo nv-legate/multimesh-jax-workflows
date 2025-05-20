@@ -8,5 +8,6 @@ RUN --mount=type=bind,source=scripts/tools,target=/opt/scripts/tools \
   /opt/scripts/tools/install.sh nsys
 
 COPY entrypoint.sh /opt/entrypoint.sh
+COPY run.py /opt/maxtext/run.py
 ENTRYPOINT [ "/opt/entrypoint.sh" ]
 CMD [ "/bin/bash" ]

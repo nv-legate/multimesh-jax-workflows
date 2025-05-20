@@ -1,0 +1,213 @@
+#! /usr/bin/env python
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+#                         All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+import argparse
+import os
+import subprocess as sp
+from contextlib import contextmanager
+from pathlib import Path
+
+
+@contextmanager
+def in_folder(path):
+    topdir = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(topdir)
+
+
+repos = {
+    "zuku": {
+        "mirror": "git@github.com:nv-legate/zuku.git",
+        "devel": ("git@github.com:nv-legate/zuku.internal.git", "main"),
+    },
+    "multimesh-jax": {
+        "mirror": "git@github.com:nv-legate/multimesh-jax.git",
+        "devel": (
+            "git@github.com:nv-legate/multimesh-jax.internal.git",
+            "main",
+        ),  # noqa: E501
+    },
+    "jax": {
+        "upstream": ("https://github.com/jax-ml/jax", "main"),
+        "devel": ("git@github.com:nv-legate/jax.git", "legate-main"),
+    },
+    "xla": {
+        "upstream": ("https://github.com/openxla/xla.git", "main"),
+        "devel": ("git@github.com:nv-legate/xla.git", "legate-main"),
+    },
+    "maxtext": {
+        "upstream": (
+            "https://github.com/AI-Hypercomputer/maxtext.git",
+            "main",
+        ),  # noqa: E501
+        "devel": (
+            "ssh://git@gitlab-master.nvidia.com:12051/legate/maxtext-internal-fork.git",  # noqa: E501
+            "legate-main",
+        ),
+    },
+}
+
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    "--tag",
+    type=str,
+    required=True,
+    help="The tag for the new release",
+)
+
+parser.add_argument(
+    "--prev-tag",
+    type=str,
+    required=True,
+    help="The tag for the previous release",
+)
+
+args = parser.parse_args()
+
+tag = args.tag
+prev_tag = args.prev_tag
+
+
+print(f"Updating release from {prev_tag} to {tag}")
+
+
+def get_commit_for_tag(tag: str):
+    cmd = ["git", "rev-list", "-n", "1", tag]
+    return sp.check_output(cmd).decode("utf-8")
+
+
+def get_common_ancestor(base1, base2):
+    cmd = ["git", "merge-base", base1, base2]
+    return sp.check_output(cmd).decode("utf-8").strip()
+
+
+def get_diff(commit):
+    cmd = ["git", "diff", commit]
+    return sp.check_output(cmd).decode("utf-8")
+
+
+def update_to_patch(name, repo):
+    print(f"updating patch for {name}")
+    upstream, up_branch = repo["upstream"]
+    devel, devel_branch = repo["devel"]
+    os.system(f"git remote add upstream {upstream}")
+    os.system(f"git remote add devel {devel}")
+    os.system("git fetch upstream")
+    os.system("git fetch devel")
+
+    patch_base = get_common_ancestor(
+        f"upstream/{up_branch}", f"devel/{devel_branch}"
+    )  # noqa: E501
+    print(f"patching {name} from {patch_base}")
+    # undo any changes in the current folder from previous patches
+    os.system("git checkout .")
+    os.system("git clean -fd")
+    os.system(f"git checkout devel/{devel_branch}")
+    diff = get_diff(patch_base)
+    os.system(f"git checkout {patch_base}")
+    return diff
+
+
+def compress(name, repo, prev_tag, tag):
+    print(f"compressing release {tag} for {name}")
+    mirror = repo["mirror"]
+    devel, branch = repo["devel"]
+    os.system(f"git remote add devel {devel}")
+    os.system("git fetch devel")
+    os.system(f"git fetch {mirror}")
+    base_commit = get_commit_for_tag(prev_tag)
+    new_branch = f"release-{tag}"
+    cmds = [
+        f"git checkout devel/{branch}",
+        f"git branch -D {new_branch}",
+        f"git reset --soft {base_commit}",
+        "git add -u",
+        f"git commit -m '{new_branch}'",
+        f"git checkout -b {new_branch}",
+        f"git push -f {mirror} {new_branch}",
+        f"gh repo edit {mirror} --default-branch {new_branch}",
+        f"git tag -f {tag}",
+        f"git push -f {mirror} {tag}",
+    ]
+    for cmd in cmds:
+        print(name, cmd)
+        os.system(cmd)
+
+
+def change_submodule_url(folder, url):
+    cmd = f"git submodule set-url {folder} {url}"
+    print(cmd)
+    os.system(cmd)
+
+
+docker = Path("docker")
+workspace = docker / "workspace"
+
+patched = [
+    "xla",
+    "jax",
+    "maxtext",
+]
+
+mirrored = [
+    "zuku",
+    "multimesh-jax",
+]
+
+
+# For some of the repos, we need to publish a patch file
+# that can be applied to the public upstream. This translates
+# our internal fork into a patch file on the most recent
+# common ancestor with the upstream. This also updates
+# the submodule url to to point to the public upstream.
+for name in patched:
+    if (workspace / name).exists():
+        folder = workspace / name
+    else:
+        folder = docker / name
+
+    with in_folder(folder):
+        new_patch = update_to_patch(name, repos[name])
+
+    with in_folder(docker / "patches" / name):
+        with open(f"{name}.patch", "w") as f:
+            f.write(new_patch)
+
+    url, branch = repos[name]["upstream"]
+    change_submodule_url(folder, url)
+
+# For some of the repos, we want to publish a compressed
+# history that has a single commit with all the incremental
+# changes since the last release. This compresses
+# the commit history and changes the submodule to point
+# to that single commit on the public mirror.
+for name in mirrored:
+    with in_folder(workspace / name):
+        compress(name, repos[name], prev_tag, tag)
+
+    change_submodule_url(workspace / name, repos[name]["mirror"])
+
+mirror = "git@github.com:nv-legate/multimesh-jax-workflows.git"
+
+prev_commit = get_commit_for_tag(prev_tag)
+
+
+new_branch = f"release-{tag}"
+os.system(f"git reset --soft {prev_commit}")
+os.system("git add -u")
+os.system(f"git branch -D {new_branch}")
+os.system(f"git checkout -b {new_branch}")
+os.system(f"git commit -m '{new_branch}'")
+os.system(f"git tag -f {tag}")
+os.system(f"git push -f {mirror} {new_branch}")
+os.system(f"git push -f {mirror} {tag}")
+
+# for now, do not auto-update the default branch
+# os.system(f"gh repo edit {mirror} --default-branch {new_branch}")
