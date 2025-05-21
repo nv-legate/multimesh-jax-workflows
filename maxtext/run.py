@@ -11,7 +11,7 @@ import runpy
 import subprocess as sp
 import sys
 from pathlib import Path
-
+from ast import literal_eval
 import yaml
 
 try:
@@ -233,8 +233,15 @@ mm_jax.add_argument(
 mm_jax.add_argument(
     "--schedule",
     type=str,
-    choices=["fill-drain", "gpipe", "1f1b", "wavefront", "prefetch-wavefront"],
+    default=None,
+    choices=["fill-drain", "gpipe", "1f1b", "wavefront", "prefetch-wavefront", "custom"],
     help="The microbatch schedule to use",
+)
+mm_jax.add_argument(
+    "--custom-schedule-path",
+    type=str,
+    default=None,
+    help="The path to the custom schedule to use. The schedule should be written as a python object in plaintext",  # noqa: E501
 )
 mm_jax.add_argument(
     "--microbatch-size",
@@ -453,6 +460,34 @@ if args.gpus > 0:
         hardware = "gpu"
 else:
     hardware = "cpu"
+
+custom_schedule_list = None
+if args.custom_schedule_path is not None:
+    if args.schedule is not None and args.schedule != "custom":
+        raise ValueError(
+            f"When custom_schedule_path is provided, schedule must be 'custom' or None, but got '{args.schedule}'"
+        )
+    # Set schedule to "custom" by default when custom_schedule is provided
+    args.schedule = "custom"
+    with open(args.custom_schedule_path) as f:
+        custom_schedule_list = f.read()
+
+    custom_schedule_list = literal_eval(custom_schedule_list)
+
+    if custom_schedule_list is None:
+        raise Exception("--custom-schedule-path must contain a valid python object")
+
+    if type(custom_schedule_list) != list:
+        raise Exception("--custom-schedule must be a list of lists of tuples (stage, task)")
+
+    for stage in custom_schedule_list:
+        if type(stage) != list:
+            raise Exception("--custom-schedule must be a list of lists of tuples (stage, task)")
+        for task in stage:
+            if type(task) != tuple and type(task) != str:
+                raise Exception("--custom-schedule must be a list of lists of tuples (stage, task)")
+args.schedule = args.schedule or "wavefront"
+
 
 if args.dump_only:
     # forces a debug mode on the run where the HLO module
@@ -708,7 +743,7 @@ if args.backend == "multimesh":
             logical_axes=transformer_axes,
         )
     else:  # pp > 1 or microbatching
-        train.set_mb_config(global_mb_size, args.schedule, num_stages, args.interleave)
+        train.set_mb_config(global_mb_size, args.schedule, num_stages, args.interleave, custom_schedule_list)
         layer_regex = re.compile(r"layers_(\d+)")
 
         def compute_devices(name: str, backprop: bool):
