@@ -22,11 +22,11 @@ def in_folder(path):
 
 repos = {
     "zuku": {
-        "mirror": "git@github.com:nv-legate/zuku.git",
+        "mirror": "https://github.com/nv-legate/zuku.git",
         "devel": ("git@github.com:nv-legate/zuku.internal.git", "main"),
     },
     "multimesh-jax": {
-        "mirror": "git@github.com:nv-legate/multimesh-jax.git",
+        "mirror": "https://github.com/nv-legate/multimesh-jax.git",
         "devel": (
             "git@github.com:nv-legate/multimesh-jax.internal.git",
             "main",
