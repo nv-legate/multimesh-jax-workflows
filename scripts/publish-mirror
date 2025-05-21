@@ -124,6 +124,7 @@ def compress(name, repo, prev_tag, tag):
     os.system(f"git fetch {mirror}")
     base_commit = get_commit_for_tag(prev_tag)
     new_branch = f"release-{tag}"
+    ssh_mirror = mirror.replace("https://github.com/", "git@github.com:")
     cmds = [
         f"git checkout devel/{branch}",
         f"git branch -D {new_branch}",
@@ -131,10 +132,10 @@ def compress(name, repo, prev_tag, tag):
         "git add -u",
         f"git commit -m '{new_branch}'",
         f"git checkout -b {new_branch}",
-        f"git push -f {mirror} {new_branch}",
-        f"gh repo edit {mirror} --default-branch {new_branch}",
+        f"git push -f {ssh_mirror} {new_branch}",
+        f"gh repo edit {ssh_mirror} --default-branch {new_branch}",
         f"git tag -f {tag}",
-        f"git push -f {mirror} {tag}",
+        f"git push -f {ssh_mirror} {tag}",
     ]
     for cmd in cmds:
         print(name, cmd)
@@ -200,10 +201,10 @@ prev_commit = get_commit_for_tag(prev_tag)
 
 
 new_branch = f"release-{tag}"
-os.system(f"git reset --soft {prev_commit}")
-os.system("git add -u")
 os.system(f"git branch -D {new_branch}")
 os.system(f"git checkout -b {new_branch}")
+os.system(f"git reset --soft {prev_commit}")
+os.system("git add -u")
 os.system(f"git commit -m '{new_branch}'")
 os.system(f"git tag -f {tag}")
 os.system(f"git push -f {mirror} {new_branch}")
