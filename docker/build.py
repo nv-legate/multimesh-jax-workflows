@@ -4,17 +4,16 @@
 #                         All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import sys
 import argparse
 import json
 import os
 import subprocess as sp
+import sys
 from pathlib import Path
-
+from subprocess import CalledProcessError
 
 import yaml
 from subprocess_tee import run
-from subprocess import CalledProcessError
 
 try:
     from eos_workflows import (
@@ -37,12 +36,6 @@ parser = argparse.ArgumentParser(allow_abbrev=False)
 parser.add_argument(
     "--cache", action=argparse.BooleanOptionalAction, default=True
 )  # noqa: E501
-
-parser.add_argument(
-    "--base-image",
-    type=str,
-    default="maxtext_base",
-)
 
 parser.add_argument(
     "--framework",
@@ -119,7 +112,7 @@ parser.add_argument(
 parser.add_argument(
     "--stage",
     type=str,
-    default=None,
+    default="install_multimesh_plugin",
     help="the stage to build up to",
 )
 
@@ -163,13 +156,20 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--name",
+    type=str,
+    default="multimesh-jax-dev",
+    help="The name of the image: <name>:<tag>",
+)  # noqa: E501
+
+parser.add_argument(
     "--upload", action=argparse.BooleanOptionalAction, default=False
 )  # noqa: E501
 
 args = parser.parse_args()
 
 dockerfile = "Dockerfile"
-short_image_name = "multimesh-jax-dev"
+short_image_name = args.name
 
 tag = args.tag or args.stage or args.framework
 image_name = f"{short_image_name}:{tag}"
@@ -228,7 +228,6 @@ try:
             ("CUDA_VERSION", args.cuda_version),
             ("CUDNN_VERSION", args.cudnn_version),
             ("FRAMEWORK", args.framework),
-            ("BASE_NAME", args.base_image),
         ):
             cmds.append("--build-arg")
             cmds.append(f"{arg}={value}")

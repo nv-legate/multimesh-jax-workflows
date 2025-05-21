@@ -13,4 +13,4 @@ if [[ -e /opt/mofed-ver ]]; then
         fi
     fi
 fi
-exec "$@"
+exec conda run -n legere --no-capture-output "$@"

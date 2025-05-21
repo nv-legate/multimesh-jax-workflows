@@ -1,176 +1,206 @@
 ARG CUDA_VERSION="12.8.1"
 ARG CUDNN_VERSION=""
-ARG BASE_NAME="maxtext_base"
 ARG JAX_PLUGIN_BASE="editable_install_zuku"
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-devel-ubuntu22.04 AS base
 
 SHELL [ "/bin/bash", "-eo", "pipefail", "-c" ]
 
-COPY install-apt.sh /opt
-RUN /opt/install-apt.sh
-
 ENV CUDA_PATH="/usr/local/cuda/lib64/stubs"
 
 FROM base AS nccl_build
 COPY nccl /opt/nccl
-COPY build-nccl.sh /opt/nccl
-COPY install-nccl.sh /opt/nccl
-RUN cd /opt/nccl && ./build-nccl.sh
+COPY scripts/nccl/install-build-deps.sh /opt/nccl
+COPY scripts/nccl/build.sh /opt/nccl
+COPY scripts/nccl/install.sh /opt/nccl
+RUN /opt/nccl/install-build-deps.sh
+RUN cd /opt/nccl && /opt/nccl/build.sh
 
 FROM base AS nccl_install
 RUN --mount=type=cache,from=nccl_build,source=/opt/nccl,target=/opt/nccl \
-  cd /opt/nccl && ./install-nccl.sh
+  cd /opt/nccl && /opt/nccl/install.sh
 
-FROM nccl_install AS bazel_install
-COPY install-bazel.sh /opt
-RUN /opt/install-bazel.sh
-
-FROM bazel_install AS conda_base
-COPY install-conda.sh /opt
-RUN /opt/install-conda.sh
-
-ENV LD_LIBRARY_PATH="/opt/install/miniconda/envs/legere/lib:${LD_LIBRARY_PATH}"
-ENV PATH="/opt/install/miniconda/bin:${PATH}"
-
-FROM conda_base AS mellanox_download
-
+FROM base AS mofed_download
+RUN mkdir -p /opt/MLNX_OFED_LINUX-5.4-3.5.8.0-ubuntu22.04-x86_64
+COPY scripts/mofed/install.sh /opt/MLNX_OFED_LINUX-5.4-3.5.8.0-ubuntu22.04-x86_64
+COPY scripts/mofed/install-build-deps.sh /opt/MLNX_OFED_LINUX-5.4-3.5.8.0-ubuntu22.04-x86_64
+RUN /opt/MLNX_OFED_LINUX-5.4-3.5.8.0-ubuntu22.04-x86_64/install-build-deps.sh
 RUN cd /opt && \
   curl -fsSL http://content.mellanox.com/ofed/MLNX_OFED-5.4-3.5.8.0/MLNX_OFED_LINUX-5.4-3.5.8.0-ubuntu22.04-x86_64.tgz | tar -xz
 
-FROM conda_base AS mellanox_install
+FROM nccl_install AS mofed_install
 COPY ibdev2netdev /usr/bin
-COPY install-mofed.sh /opt
-RUN --mount=type=cache,from=mellanox_download,source=/opt/MLNX_OFED_LINUX-5.4-3.5.8.0-ubuntu22.04-x86_64,target=/opt/MLNX_OFED_LINUX-5.4-3.5.8.0-ubuntu22.04-x86_64 \
-  /opt/install-mofed.sh
+RUN --mount=type=cache,from=mofed_download,source=/opt/MLNX_OFED_LINUX-5.4-3.5.8.0-ubuntu22.04-x86_64,target=/opt/MLNX_OFED_LINUX-5.4-3.5.8.0-ubuntu22.04-x86_64 \
+  /opt/MLNX_OFED_LINUX-5.4-3.5.8.0-ubuntu22.04-x86_64/install.sh
 
-FROM mellanox_install AS ucx_build
+FROM mofed_install AS ucx_build
 COPY ucx /opt/ucx
-COPY build-ucx.sh /opt/ucx
-RUN /opt/ucx/build-ucx.sh
+COPY scripts/ucx/install-build-deps.sh /opt/ucx
+COPY scripts/ucx/build.sh /opt/ucx
+RUN /opt/ucx/install-build-deps.sh
+RUN /opt/ucx/build.sh
 
-FROM mellanox_install AS ucx_install
+FROM mofed_install AS ucx_install
 RUN --mount=type=cache,from=ucx_build,source=/opt/ucx,target=/opt/ucx \
   cd /opt/ucx && make -j install
 
 FROM ucx_install AS ucc_build
 COPY ucc /opt/ucc
-COPY build-ucc.sh /opt/ucc
-RUN /opt/ucc/build-ucc.sh
+COPY scripts/ucc/install-build-deps.sh /opt/ucc
+COPY scripts/ucc/build.sh /opt/ucc
+RUN /opt/ucc/install-build-deps.sh
+RUN /opt/ucc/build.sh
 
 FROM ucx_install AS ucc_install
 RUN --mount=type=cache,from=ucc_build,source=/opt/ucc,target=/opt/ucc \
   cd /opt/ucc && make -j install
 
 FROM ucc_install AS symlink_cuda
-COPY symlink-cudalibs.sh /opt
+COPY scripts/symlink-cudalibs.sh /opt
 RUN /opt/symlink-cudalibs.sh
 
-FROM symlink_cuda AS te_install
+FROM base AS conda_download
+RUN mkdir -p /opt/conda
+COPY scripts/conda/install-build-deps.sh /opt/conda
+COPY scripts/conda/download.sh /opt/conda
+COPY scripts/conda/install.sh /opt/conda
+RUN /opt/conda/install-build-deps.sh
+RUN /opt/conda/download.sh
+
+FROM symlink_cuda AS conda_base
+RUN --mount=type=cache,from=conda_download,source=/opt/conda,target=/opt/conda \
+  /opt/conda/install.sh
+
+ENV LD_LIBRARY_PATH="/opt/install/miniconda/envs/legere/lib:${LD_LIBRARY_PATH}"
+ENV PATH="/opt/install/miniconda/bin:${PATH}"
+
+FROM conda_base AS te_build
 COPY te /opt/te
-COPY install-te.sh /opt
-RUN conda run -n legere python -m pip install cmake
+COPY scripts/te/build.sh /opt/te
+COPY scripts/te/install.sh /opt/te
+RUN --mount=type=bind,source=te-xla,target=/opt/xla \
+  /opt/te/build.sh
+
 # Mount a clean XLA source tree distinct from the XLA
 # tree for the plugin. TE only uses the XLA code
 # to query for certain parameters. Any changes to
 # XLA plugin code would otherwise trigger a complete
 # rebuild of TransformerEngine, which is very expensive
+FROM conda_base AS te_install
 RUN --mount=type=bind,source=te-xla,target=/opt/xla \
-  /opt/install-te.sh -e
+  --mount=type=cache,from=te_build,source=/opt/te,target=/opt/te \
+  /opt/te/install.sh
 
-FROM te_install AS install_clang
-COPY install-clang.sh /opt
-RUN /opt/install-clang.sh
-RUN ln -s /usr/bin/clangd-17 /usr/bin/clangd
-
-FROM install_clang AS maxtext_base
+FROM te_install AS maxtext_install
 COPY maxtext /opt/maxtext
-RUN conda run -n legere python -m pip install flit-core
-RUN cd /opt/maxtext && conda run -n legere python -m pip install -e . --no-build-isolation --force-reinstall
+COPY scripts/maxtext/install.sh /opt/maxtext
+RUN /opt/maxtext/install.sh
 
-FROM ${BASE_NAME} AS setup_devcontainer_build
-ARG BUILD_BASE_DIR=/opt/build
-ARG LIB_DIR=/opt/lib
+FROM maxtext_install AS build_custom_jaxlib
 ARG BAZEL_CACHE=grpc://host.docker.internal:9092
-COPY build-jaxlib.sh install-jaxlib.sh /opt
-
-FROM setup_devcontainer_build AS build_custom_jaxlib
 COPY workspace/xla /opt/workspace/xla
 COPY workspace/jax /opt/workspace/jax
-RUN /opt/build-jaxlib.sh ${BUILD_BASE_DIR}/jaxlib ${BAZEL_CACHE}
+COPY scripts/jaxlib/install-build-deps.sh /opt/workspace/jax
+COPY scripts/jaxlib/build.sh /opt/workspace/jax
+COPY scripts/jaxlib/install.sh /opt/workspace/jax
+RUN /opt/workspace/jax/install-build-deps.sh
+RUN /opt/workspace/jax//build.sh ${BAZEL_CACHE}
 
-FROM setup_devcontainer_build AS install_custom_jaxlib
+FROM maxtext_install AS install_custom_jaxlib
 RUN conda run -n legere python -m pip uninstall -y jaxlib
-RUN --mount=type=cache,from=build_custom_jaxlib,source=${BUILD_BASE_DIR}/jaxlib,target=${BUILD_BASE_DIR}/jaxlib \
-  /opt/install-jaxlib.sh ${BUILD_BASE_DIR}/jaxlib
+RUN --mount=type=cache,from=build_custom_jaxlib,source=/opt/build/jaxlib,target=/opt/build/jaxlib \
+  --mount=type=cache,from=build_custom_jaxlib,source=/opt/workspace/jax,target=/opt/workspace/jax \
+  /opt/workspace/jax/install.sh
 
 FROM install_custom_jaxlib AS reinstall_custom_jax
 RUN conda run -n legere python -m pip uninstall -y jax
-RUN --mount=type=cache,from=build_custom_jaxlib,source=/opt/workspace/jax,target=/opt/workspace/jax \
-  cd /opt/workspace/jax && \
-  conda run --no-capture-out -n legere python -m pip install . --force-reinstall --no-deps
+COPY workspace/jax /opt/workspace/jax
+RUN cd /opt/workspace/jax && \
+  conda run --no-capture-out -n legere python -m pip install -e . --force-reinstall --no-deps
 
-# rename the stage
 FROM reinstall_custom_jax AS devcontainer_base
-COPY rapids-cmake /opt/rapids-cmake
 COPY cpm /opt/cpm
-COPY \
-   configure-realm.sh build-realm.sh install-realm.sh \
-   configure-zuku.sh build-zuku.sh \
-   configure-xla.sh xla-compile-commands.sh \
-   configure-multimesh-jax.sh build-multimesh-jax.sh install-multimesh-jax.sh \
-   startup-devcontainer.sh \
-   /opt
+COPY rapids-cmake /opt/rapids-cmake
 
-FROM devcontainer_base AS setup_realm
+FROM devcontainer_base AS devcontainer_test
+COPY workspace/xla /opt/workspace/xla
+COPY workspace/realm /opt/workspace/realm
+COPY workspace/zuku /opt/workspace/zuku
+COPY workspace/multimesh-jax /opt/workspace/multimesh-jax
+
+FROM reinstall_custom_jax AS build_realm
 ARG BUILD_TYPE=Release
 COPY workspace/realm /opt/workspace/realm
+COPY scripts/realm/* /opt/workspace/realm
+RUN /opt/workspace/realm/install-build-deps.sh
 RUN --mount=type=cache,target=/ccache/realm \
-  /opt/configure-realm.sh ${BUILD_TYPE} ${BUILD_BASE_DIR}/realm ${LIB_DIR}
-
-FROM setup_realm AS build_realm
+  /opt/workspace/realm/configure.sh ${BUILD_TYPE}
 RUN --mount=type=cache,target=/ccache/realm \
-  /opt/build-realm.sh ${BUILD_BASE_DIR}/realm
+  /opt/workspace/realm/build.sh
 
-FROM setup_realm AS editable_install_realm
-RUN --mount=type=cache,from=build_realm,source=${BUILD_BASE_DIR}/realm,target=${BUILD_BASE_DIR}/realm \
+FROM reinstall_custom_jax AS install_realm
+RUN --mount=type=cache,from=build_realm,source=/opt/build/realm,target=/opt/build/realm \
+  --mount=type=cache,from=build_realm,source=/opt/workspace/realm,target=/opt/workspace/realm \
+  --mount=type=cache,from=build_realm,source=/opt/lib,target=/opt/lib \
   --mount=type=cache,target=/ccache/realm \
-  /opt/build-realm.sh ${BUILD_BASE_DIR}/realm
+  /opt/workspace/realm/install.sh
 
-FROM editable_install_realm AS setup_zuku
+FROM install_realm AS build_zuku
+ARG BUILD_TYPE=Release
 COPY workspace/zuku /opt/workspace/zuku
+COPY scripts/zuku/* /opt/workspace/zuku
+COPY cpm /opt/cpm
+COPY rapids-cmake /opt/rapids-cmake
+RUN /opt/workspace/zuku/install-build-deps.sh
 RUN --mount=type=cache,target=/ccache/zuku \
-    --mount=type=bind,from=build_realm,source=${BUILD_BASE_DIR}/realm,target=${BUILD_BASE_DIR}/realm \
-  /opt/configure-zuku.sh ${BUILD_TYPE} ${BUILD_BASE_DIR}/zuku ${BUILD_BASE_DIR}/realm ${LIB_DIR}
-
-FROM setup_zuku AS build_zuku
+  /opt/workspace/zuku/configure.sh ${BUILD_TYPE}
 RUN --mount=type=cache,target=/ccache/zuku \
-    --mount=type=bind,from=build_realm,source=${BUILD_BASE_DIR}/realm,target=${BUILD_BASE_DIR}/realm \
-  /opt/build-zuku.sh ${BUILD_BASE_DIR}/zuku
+  /opt/workspace/zuku/build.sh
 
-FROM setup_zuku AS editable_install_zuku
+FROM install_realm AS install_zuku
 RUN --mount=type=cache,target=/ccache/zuku \
-    --mount=type=bind,from=build_realm,source=${BUILD_BASE_DIR}/realm,target=${BUILD_BASE_DIR}/realm \
-    --mount=type=cache,from=build_zuku,source=${BUILD_BASE_DIR}/zuku,target=${BUILD_BASE_DIR}/zuku \
-  /opt/build-zuku.sh ${BUILD_BASE_DIR}/zuku
+    --mount=type=cache,from=build_zuku,source=/opt/build/zuku,target=/opt/build/zuku \
+    --mount=type=cache,from=build_zuku,source=/opt/lib,target=/opt/lib \
+    --mount=type=cache,from=build_zuku,source=/opt/workspace/zuku,target=/opt/workspace/zuku \
+  /opt/workspace/zuku/install.sh
 
-FROM ${JAX_PLUGIN_BASE} AS setup_jax_plugin
+FROM install_zuku AS build_multimesh_plugin
+ARG BUILD_TYPE=Release
+ARG BAZEL_CACHE=grpc://host.docker.internal:9092
 COPY workspace/multimesh-jax /opt/workspace/multimesh-jax
+COPY scripts/multimesh-jax/* /opt/workspace/multimesh-jax
+COPY cpm /opt/cpm
+COPY rapids-cmake /opt/rapids-cmake
 COPY workspace/xla /opt/workspace/xla
-RUN /opt/configure-xla.sh \
-    && /opt/configure-multimesh-jax.sh ${BUILD_TYPE} ${BUILD_BASE_DIR}/multimesh-jax ${BUILD_BASE_DIR}/realm ${BUILD_BASE_DIR}/zuku ${LIB_DIR} ${BAZEL_CACHE}
+RUN /opt/workspace/multimesh-jax/install-build-deps.sh
+RUN /opt/workspace/multimesh-jax/configure-xla.sh
+RUN /opt/workspace/multimesh-jax/configure.sh ${BUILD_TYPE} ${BAZEL_CACHE}
+RUN \
+  --mount=type=cache,from=build_zuku,source=/opt/workspace/zuku,target=/opt/workspace/zuku \
+  --mount=type=cache,from=build_realm,source=/opt/workspace/realm,target=/opt/workspace/realm \
+  /opt/workspace/multimesh-jax/build.sh
 
-FROM setup_jax_plugin AS build_jax_plugin
-RUN --mount=type=cache,target=/ccache/multimesh-jax \
-    --mount=type=cache,from=build_realm,source=${BUILD_BASE_DIR}/realm,target=${BUILD_BASE_DIR}/realm \
-    --mount=type=cache,from=build_zuku,source=${BUILD_BASE_DIR}/zuku,target=${BUILD_BASE_DIR}/zuku \
-    /opt/build-multimesh-jax.sh ${BUILD_BASE_DIR}/multimesh-jax
+FROM install_zuku AS install_multimesh_plugin
+COPY rapids-cmake /opt/rapids-cmake
+RUN --mount=type=cache,from=build_multimesh_plugin,source=/opt/build/multimesh-jax,target=/opt/build/multimesh-jax \
+  --mount=type=cache,from=build_multimesh_plugin,source=/opt/workspace/xla,target=/opt/workspace/xla \
+  --mount=type=cache,from=build_multimesh_plugin,source=/opt/workspace/multimesh-jax,target=/opt/workspace/multimesh-jax \
+  --mount=type=cache,from=build_multimesh_plugin,source=/opt/lib,target=/opt/lib \
+  --mount=type=cache,from=build_multimesh_plugin,source=/root/.cache/bazel,target=/root/.cache/bazel \
+    /opt/workspace/multimesh-jax/install.sh
 
-FROM setup_jax_plugin AS editable_install_jax_plugin
-RUN --mount=type=cache,from=build_jax_plugin,source=${BUILD_BASE_DIR}/multimesh-jax,target=${BUILD_BASE_DIR}/multimesh-jax \
-  --mount=type=cache,from=build_jax_plugin,source=/opt/workspace/xla,target=/opt/workspace/xla \
-  --mount=type=cache,from=build_jax_plugin,source=/root/.cache/bazel,target=/root/.cache/bazel \
-    /opt/build-multimesh-jax.sh ${BUILD_BASE_DIR}/multimesh-jax \
-    && /opt/install-multimesh-jax.sh ${BUILD_BASE_DIR}/multimesh-jax .
+FROM install_multimesh_plugin AS install_tools
+RUN --mount=type=bind,source=scripts/tools,target=/opt/scripts/tools \
+  /opt/scripts/tools/install.sh jupyter
+
+FROM install_tools AS distribute
+COPY apt-base /opt/source/apt-base
+RUN --mount=type=bind,source=scripts,target=/opt/scripts \
+  mkdir -p /opt/source && cd /opt/source && /opt/scripts/download-all-sources
+COPY nccl /opt/source/nccl
+COPY ucc /opt/source/ucc
+COPY ucx /opt/source/ucx
+COPY te /opt/source/te
+COPY workspace/xla /opt/source/xla
 
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]

@@ -803,11 +803,15 @@ argv.append(f"hardware={hardware}")
 
 # parallelism has to be split betweeen the ICI and DCN
 # explicitly for maxtext
-num_local_devices = len(
-    sp.check_output(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"])
-    .decode("utf-8")
-    .splitlines()
-)
+if args.gpus > 1:
+  num_local_devices = len(
+      sp.check_output(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"])
+      .decode("utf-8")
+      .splitlines()
+  )
+else:
+  num_local_devices = args.cpus
+
 if args.gpus == 0 or num_local_devices == 0:
     num_local_devices = args.cpus
 total_nodes = total_devices // num_local_devices

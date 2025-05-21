@@ -1,0 +1,64 @@
+#! /usr/bin/env python
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+#                         All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+import argparse
+import glob
+import os
+import shutil
+import subprocess as sp
+from contextlib import contextmanager
+from pathlib import Path
+
+
+@contextmanager
+def in_folder(f):
+    topdir = os.getcwd()
+    f = Path(f)
+    f.mkdir(parents=True, exist_ok=True)
+    os.chdir(f)
+    try:
+        yield
+    finally:
+        os.chdir(topdir)
+
+
+parser = argparse.ArgumentParser(allow_abbrev=False)
+parser.add_argument(
+    "--apt-base",
+    type=str,
+    default=None,
+    help="path containing 'apt list --installed' for base image to omit",
+)
+
+args = parser.parse_args()
+
+base_pkgs = set()
+if args.apt_base:
+    for line in open(args.apt_base):
+        pkg = line.split("/")[0].split(":")[0]
+        base_pkgs.add(pkg)
+
+needed_pkgs = []
+apt_list = sp.check_output(["apt", "list", "--installed"]).decode("utf-8")
+for line in apt_list.splitlines():
+    pkg = line.split("/")[0].split(":")[0]
+    if pkg in base_pkgs:
+        continue
+
+    with in_folder("apt-raw-downloads"):
+        cmd = ["apt-get", "source", pkg]
+        try:
+            output = sp.check_output(cmd).decode("utf-8")
+            print(f"fetched {pkg}: {output}")
+        except Exception:
+            print(f"{pkg} failed")
+
+# apt unzips everything and leaves a ton of bloat
+tar_dest = Path("apt").resolve()
+tar_dest.mkdir(parents=True, exist_ok=True)
+with in_folder("apt-raw-downloads"):
+    tars = glob.glob("*.tar*")
+    for tar in tars:
+        shutil.copy(tar, tar_dest / tar)

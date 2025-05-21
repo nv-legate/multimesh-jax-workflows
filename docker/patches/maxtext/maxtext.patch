@@ -150,7 +150,7 @@ index 2d13f1d8..66a0496e 100644
 @@ -412,7 +412,7 @@ class Decoder(nn.Module):
      policy = self.get_remat_policy()
      RemattedBlockLayers = self.set_remat_policy(self.decoder_layer, policy)
-
+ 
 -    if cfg.using_pipeline_parallelism:
 +    if False and cfg.using_pipeline_parallelism:
        if cfg.pipeline_fsdp_ag_once:
@@ -161,9 +161,9 @@ index 9ec7ac63..d35dcd79 100644
 --- a/MaxText/max_utils.py
 +++ b/MaxText/max_utils.py
 @@ -35,7 +35,11 @@ from typing import Any, Tuple
-
+ 
  import max_logging
-
+ 
 -
 +import numpy as np
 +import jax
@@ -223,7 +223,7 @@ index 9ec7ac63..d35dcd79 100644
 +  max_logging.log(f"jax.device_count(): {jax.device_count()}")
 +  max_logging.log(f"jax.local_device_count(): {jax.local_device_count()}")
 +  max_logging.log(f"jax.process_count(): {jax.process_count()}")
-
+ 
  def initialize_jax_for_gpu(raw_keys):
    """Jax distributed initialize for GPUs."""
 @@ -258,18 +273,18 @@ def initialize_jax_for_cpu(raw_keys):
@@ -322,11 +322,11 @@ index 9ec7ac63..d35dcd79 100644
    )
 +  # state is not actually needed right now
 +  return None, state_mesh_annotations, state_mesh_shardings, data_iterator
-
+ 
    # Initialization
    with nn_partitioning.axis_rules(config.logical_axis_rules):
 diff --git a/MaxText/maxtext_utils.py b/MaxText/maxtext_utils.py
-index c748ea98..22de483e 100644
+index c748ea98..0d8a7685 100644
 --- a/MaxText/maxtext_utils.py
 +++ b/MaxText/maxtext_utils.py
 @@ -19,9 +19,17 @@ limitations under the License.
@@ -519,7 +519,7 @@ index 424e170c..e8730c6b 100644
      if raw_keys["dataset_type"] == "c4_mlperf":
        raw_keys["add_bos"] = False
 diff --git a/MaxText/train.py b/MaxText/train.py
-index 08cbd560..e38c9d3a 100644
+index 08cbd560..8238d4cb 100644
 --- a/MaxText/train.py
 +++ b/MaxText/train.py
 @@ -27,7 +27,8 @@ import functools
