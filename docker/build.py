@@ -112,7 +112,7 @@ parser.add_argument(
 parser.add_argument(
     "--stage",
     type=str,
-    default=None,
+    default="install_multimesh_plugin",
     help="the stage to build up to",
 )
 

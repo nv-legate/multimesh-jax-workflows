@@ -28,5 +28,5 @@ if [ ! -z $nsys ]; then
 fi
 
 if [ ! -z $jupyter ]; then
-  python -m pip install notebook --no-cache-dir
+  conda run -n legere --no-capture-output python -m pip install notebook --no-cache-dir
 fi

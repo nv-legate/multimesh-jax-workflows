@@ -3,3 +3,8 @@ workspace/multimesh-jax/.cache
 workspace/zuku/.cache
 workspace/realm/.cache
 workspace/xla/.cache
+workspace/xla/.git
+nccl/.git
+ucc/.git
+ucx/.git
+te/.git

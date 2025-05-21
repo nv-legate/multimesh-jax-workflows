@@ -1,0 +1,93 @@
+#! /usr/bin/env python
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+#                         All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+import glob
+import json
+import os
+import traceback
+from contextlib import contextmanager
+from pathlib import Path
+
+import requests
+import yaml
+
+
+@contextmanager
+def in_folder(f):
+    topdir = os.getcwd()
+    os.chdir(f)
+    try:
+        yield
+    finally:
+        os.chdir(topdir)
+
+
+def download_tarball(tar_url, folder, skip_exists=True):
+    tarball = Path(tar_url).name
+    target = folder / tarball
+    if target.exists():
+        return target
+
+    response = requests.get(tar_url, stream=True)
+    if response.status_code == 200:
+        print(f"saving {tar_url} locally to {target}")
+        folder.mkdir(parents=True, exist_ok=True)
+        with open(target, "wb") as f:
+            f.write(response.raw.read())
+        return target
+    else:
+        raise Exception(f"response failed for {tar_url}")
+
+
+def get_url(pj):
+    with open(pj) as f:
+        data = json.load(f)
+    source = Path(data["link"]["source"])
+
+    meta_yaml = source / "info" / "recipe" / "meta.yaml"
+    if not meta_yaml.exists():
+        return None
+
+    with open(meta_yaml) as f:
+        data = yaml.safe_load(f)
+        source_info = data["source"]
+        if isinstance(source_info, list):
+            source_info = source_info[0]
+        url = source_info["url"]
+        if isinstance(url, list):
+            return url[0]
+        return url
+
+
+already_downloaded = dict()
+
+prefix = Path(os.environ["CONDA_PREFIX"]).resolve()
+conda_meta = prefix / "conda-meta"
+with in_folder(conda_meta):
+    pkg_jsons = glob.glob("*.json")
+
+for pj in pkg_jsons:
+    try:
+        name = pj[:-5]  # strip .json
+        json_path = conda_meta / pj
+        url = get_url(json_path)
+        folder = Path("conda") / name
+        # conda often installs multiple packages from
+        # the same source distribution
+        if downloaded := already_downloaded.get(url):
+            target = folder / "source.tar.gz"
+            print(f"{name} already downloaded as {target}")
+            if not (target.exists() or target.is_symlink()):
+                folder.mkdir(parents=True, exist_ok=True)
+                target.symlink_to(downloaded)
+            continue
+
+        if url is None:
+            print(name, "failed")
+        else:
+            target = download_tarball(url, folder)
+            already_downloaded[url] = target
+    except Exception as e:
+        print(pj, "failed", e)
