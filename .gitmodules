@@ -34,7 +34,7 @@
   shallow = true
 [submodule "docker/workspace/zuku"]
   path = docker/workspace/zuku
-	url = git@github.com:nv-legate/zuku.git
+	url = https://github.com/nv-legate/zuku.git
   shallow = true
 [submodule "docker/workspace/xla"]
   path = docker/workspace/xla
@@ -46,4 +46,4 @@
   shallow = true
 [submodule "docker/workspace/multimesh-jax"]
 	path = docker/workspace/multimesh-jax
-	url = git@github.com:nv-legate/multimesh-jax.git
+	url = https://github.com/nv-legate/multimesh-jax.git
