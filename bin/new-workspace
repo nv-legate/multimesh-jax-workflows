@@ -5,7 +5,12 @@ if [ -z "$name" ]; then
   echo "Error: Must give a workspace name" >&2
   exit 1
 fi
+
 branch=`git branch --show-current`
 git clone -b $branch $2 $name
+
+# link the maxtext run script into the docker built context
+ln -s $name/maxtext/run.py $name/docker/run.py
+
 code --new-window $name
 

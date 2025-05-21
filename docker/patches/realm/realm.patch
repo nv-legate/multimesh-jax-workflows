@@ -1,0 +1,25 @@
+diff --git a/runtime/CMakeLists.txt b/runtime/CMakeLists.txt
+index 6c1489382a..94c4adb417 100644
+--- a/runtime/CMakeLists.txt
++++ b/runtime/CMakeLists.txt
+@@ -560,7 +560,6 @@ if(Legion_USE_CUDA)
+   target_link_libraries(RealmRuntime PUBLIC CUDA::toolkit)
+   target_link_libraries(RealmStatic PUBLIC CUDA::toolkit)
+   # Advertise our driver link to Realm consumers while ensuring libcuda.so isn't in Realm's RPATH
+-  target_link_libraries(RealmRuntime INTERFACE CUDA::cuda_driver)
+   target_link_libraries(RealmStatic INTERFACE CUDA::cuda_driver)
+   # for backwards compatibility in applications
+   target_compile_definitions(RealmRuntime INTERFACE USE_CUDA)
+diff --git a/runtime/realm/inst_layout.inl b/runtime/realm/inst_layout.inl
+index 465be72894..0b14ce1c38 100644
+--- a/runtime/realm/inst_layout.inl
++++ b/runtime/realm/inst_layout.inl
+@@ -113,7 +113,7 @@ namespace Realm {
+     InstanceLayout<N,T> *layout = new InstanceLayout<N,T>;
+     layout->bytes_used = 0;
+     // require 32B alignment of each instance piece for vectorizing goodness
+-    layout->alignment_reqd = 32;
++    layout->alignment_reqd = 64;
+     layout->space = is;
+
+     // if the index space is empty, all fields can use the same empty

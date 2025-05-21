@@ -12,9 +12,6 @@ run the `bootstrap.sh` in the top-level directory:
 multimesh-jax-workflows $ ./bootstrap.sh
 ```
 
-Some of the repos are private to Nvidia and expect an SSH key to have been configured.
-
-
 ## (Optional) Start a remote Bazel cache
 
 The XLA build compiles 1000s of files and can take a very long time. If you need to consistetly

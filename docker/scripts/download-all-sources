@@ -1,0 +1,30 @@
+#! /usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+#                         All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# this assumes that the full list of apt packages from the base image
+# is available as a file 'apt-base'
+
+# get all the apt packages BEFORE
+# we add more things for the download
+
+WORKDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+sed -i 's/^# deb-src/deb-src/' /etc/apt/sources.list
+apt-get update
+
+$WORKDIR/download-apt-source --apt-base=apt-base
+rm -rf apt-raw-downloads
+
+# now add extra apt stuff
+apt-get install -y git --no-install-recommends
+conda run -n legere --no-capture-output python -m pip list installed > pip_packages
+sed -i '1,2d' pip_packages
+# now add the extra pip stuff so it's not included
+conda run -n legere python -m pip install requests pyyaml --no-cache-dir
+conda run -n legere --no-capture-output $WORKDIR/download-pip-source --pkgs pip_packages
+conda run -n legere --no-capture-output $WORKDIR/download-conda-source
+apt remove -y git
+rm -f pip_packages
+rm -f *.cached

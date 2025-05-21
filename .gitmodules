@@ -4,7 +4,7 @@
   shallow = true
 [submodule "docker/maxtext"]
   path = docker/maxtext
-  url = https://github.com/AI-Hypercomputer/maxtext.git
+	url = https://github.com/AI-Hypercomputer/maxtext.git
   shallow = true
 [submodule "docker/te"]
   path = docker/te
@@ -30,15 +30,15 @@
   url = https://github.com/cpm-cmake/CPM.cmake.git
 [submodule "docker/workspace/jax"]
   path = docker/workspace/jax
-  url = https://github.com/jax-ml/jax.git
+	url = https://github.com/jax-ml/jax
   shallow = true
 [submodule "docker/workspace/zuku"]
   path = docker/workspace/zuku
-  url = https://github.com/nv-legate/zuku.git
+	url = git@github.com:nv-legate/zuku.git
   shallow = true
 [submodule "docker/workspace/xla"]
   path = docker/workspace/xla
-  url = https://github.com/openxla/xla.git
+	url = https://github.com/openxla/xla.git
   shallow = true
 [submodule "docker/workspace/realm"]
   path = docker/workspace/realm
@@ -46,4 +46,4 @@
   shallow = true
 [submodule "docker/workspace/multimesh-jax"]
 	path = docker/workspace/multimesh-jax
-  url = https://github.com/nv-legate/multimesh-jax.git
+	url = git@github.com:nv-legate/multimesh-jax.git
