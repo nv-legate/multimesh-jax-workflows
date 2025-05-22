@@ -488,6 +488,10 @@ if args.custom_schedule_path is not None:
                 raise Exception("--custom-schedule must be a list of lists of tuples (stage, task)")
 args.schedule = args.schedule or "wavefront"
 
+# revert support for args.schedule until next release
+# TODO: add back support
+if args.schedule == "custom":
+  raise ValueError("custom schedules not yet supported in current release")
 
 if args.dump_only:
     # forces a debug mode on the run where the HLO module
@@ -743,7 +747,7 @@ if args.backend == "multimesh":
             logical_axes=transformer_axes,
         )
     else:  # pp > 1 or microbatching
-        train.set_mb_config(global_mb_size, args.schedule, num_stages, args.interleave, custom_schedule_list)
+        train.set_mb_config(global_mb_size, args.schedule, num_stages, args.interleave)
         layer_regex = re.compile(r"layers_(\d+)")
 
         def compute_devices(name: str, backprop: bool):

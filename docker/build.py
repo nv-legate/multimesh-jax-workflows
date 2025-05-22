@@ -110,6 +110,10 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--include-source", action=argparse.BooleanOptionalAction, default=True
+)
+
+parser.add_argument(
     "--stage",
     type=str,
     default="install_multimesh_plugin",
@@ -222,6 +226,12 @@ try:
         else:
             cmds.append("--build-arg")
             cmds.append("BAZEL_CACHE=")
+
+        cmds.append("--build-arg")
+        if args.include_source:
+            cmds.append("FINAL_IMAGE_BASE=distribute")
+        else:
+            cmds.append("FINAL_IMAGE_BASE=install_tools")
 
         for arg, value in (
             ("BUILD_TYPE", args.build_type),

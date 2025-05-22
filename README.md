@@ -69,7 +69,7 @@ multimesh-jax-workflows/docker $ ./start-cache.sh
 
 ## Driver script for MaxText
 
-A script for running [MaxText](maxtext/run.py) is included to simplify the process
+A script for running [MaxText](docker/workspace/maxtext-scripts/run.py) is included to simplify the process
 of tuning parameters. A full list of options can be required by running:
 
 ```bash
@@ -103,13 +103,13 @@ To run an example job in the container locally, example scripts are included in 
 
 ### MaxText with 2 GPUs
 
-A [script](maxtext/validate-gpu.sh) for running a small job with TP=2 is included.
+A [script](docker/workspace/maxtext-scripts/validate-gpu.sh) for running a small job with TP=2 is included.
 The container can be launched from the top-level directory as:
 
 ```bash
-multimesh-jax-workflows $ docker run \
+docker run \
   --entrypoint /opt/entrypoint.sh \
-  --mount type=bind,source="$(pwd)"/maxtext,target=/workspace \
+  --mount type=bind,source=$(pwd)/docker/workspace/maxtext-scripts,target=/workspace \
   -w /workspace \
   --gpus 2 \
   ghcr.io/nv-legate/multimesh-jax:v0.1.1 \
@@ -118,22 +118,16 @@ multimesh-jax-workflows $ docker run \
 
 ### MaxText with 8 CPUs
 
-A [script](maxtext/validate-cpu.sh) for running a small job with DP=2, PP=2, TP=2 is included.
+A [script](docker/workspace/maxtext-scripts/validate-cpu.sh) for running a small job with DP=2, PP=2, TP=2 is included.
 Currently the container requires CUDA present even if running a
 CPU-only job. To launch the job:
 
 ```bash
-multimesh-jax-workflows $ docker run \
+docker run \
   --entrypoint /opt/entrypoint.sh \
-  --mount type=bind,source="$(pwd)"/maxtext,target=/workspace \
+  --mount type=bind,source=$(pwd)/docker/workspace/maxtext-scripts,target=/workspace \
   -w /workspace \
   ghcr.io/nv-legate/multimesh-jax:v0.1.1 \
   ./validate-cpu.sh
 ```
 
-## Large runs on a DGX
-
-Scripts and config files are included for running larger jobs
-with hwloc bindings for a DGX H100.
-
-* [MaxText GPT3-175B for 64 GPUs](maxtext/gpt3-175b-64gpus)
