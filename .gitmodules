@@ -4,7 +4,7 @@
   shallow = true
 [submodule "docker/maxtext"]
   path = docker/maxtext
-  url = ssh://git@gitlab-master.nvidia.com:12051/legate/maxtext-fork.git 
+  url = git@github.com:nv-legate/maxtext.git
   shallow = true
 [submodule "docker/te"]
   path = docker/te
