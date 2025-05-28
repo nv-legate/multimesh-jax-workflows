@@ -6,6 +6,8 @@ FROM nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-devel-ubuntu22.04 AS base
 SHELL [ "/bin/bash", "-eo", "pipefail", "-c" ]
 
 ENV CUDA_PATH="/usr/local/cuda/lib64/stubs"
+RUN --mount=type=bind,source=scripts/apt,target=/opt/apt \
+  /opt/apt/install.sh
 
 FROM base AS nccl_build
 COPY nccl /opt/nccl
