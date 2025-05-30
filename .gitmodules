@@ -3,7 +3,7 @@
   url = https://github.com/NVIDIA/nccl.git
   shallow = true
 [submodule "docker/maxtext"]
-  path = docker/maxtext
+	path = docker/workspace/maxtext
   url = git@github.com:nv-legate/maxtext.git
   shallow = true
 [submodule "docker/te"]

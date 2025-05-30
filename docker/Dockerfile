@@ -93,9 +93,9 @@ RUN --mount=type=bind,source=te-xla,target=/opt/xla \
   /opt/te/install.sh
 
 FROM te_install AS maxtext_install
-COPY maxtext /opt/maxtext
-COPY scripts/maxtext/install.sh /opt/maxtext
-RUN /opt/maxtext/install.sh
+COPY workspace/maxtext /opt/workspace/maxtext
+COPY scripts/maxtext/install.sh /opt/workspace/maxtext
+RUN /opt/workspace/maxtext/install.sh
 
 FROM maxtext_install AS build_custom_jaxlib
 ARG BAZEL_CACHE=grpc://host.docker.internal:9092

@@ -15,5 +15,6 @@ apt install -y lsb-release wget software-properties-common gnupg git
 wget https://apt.llvm.org/llvm.sh
 chmod u+x llvm.sh
 ./llvm.sh 17
+apt-get install clangd-17 clang-tidy-17
 
 conda install -c conda-forge -y ninja pybind11 ccache

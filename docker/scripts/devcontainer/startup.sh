@@ -17,6 +17,11 @@ git config --global --add safe.directory /opt/workspace/xla
 git config --global --add safe.directory /opt/workspace/multimesh-jax
 git config --global --add safe.directory /opt/workspace/realm
 git config --global --add safe.directory /opt/workspace/zuku
+git config --global --add safe.directory /opt/workspace/maxtext
+
+pushd /opt/workspace/maxtext
+python -m pip install -e . --force-reinstall --no-deps
+popd
 
 pushd /opt/workspace/realm
 /opt/scripts/realm/configure.sh ${BUILD_TYPE}
@@ -45,7 +50,7 @@ popd
 cd ~/
 wget https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash
 # set up git completion
-echo "source git-completion.bash" >> .bashrc
+echo "source ~/git-completion.bash" >> .bashrc
 # ignore annoying lldb error
 echo "settings set target.disable-aslr false" >> .lldbinit
 
