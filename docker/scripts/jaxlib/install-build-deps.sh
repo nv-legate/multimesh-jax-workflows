@@ -1,5 +1,6 @@
 #! /usr/bin/env bash
 
+apt-get update
 apt-get install -y lsb-release wget software-properties-common gnupg --no-install-recommends
 
 wget https://github.com/bazelbuild/bazelisk/releases/download/v1.23.0/bazelisk-amd64.deb
