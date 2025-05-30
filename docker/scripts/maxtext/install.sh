@@ -2,7 +2,7 @@
 
 set -e
 
-pushd /opt/maxtext
+pushd /opt/workspace/maxtext
 
 conda run -n legere conda install -c conda-forge -y git pkg-config
 
@@ -14,3 +14,5 @@ conda run -n legere --no-capture-output \
 conda run -n legere conda remove -y git pkg-config
 conda run -n legere python -m pip uninstall -y flit-core
 conda run -n legere python -m pip cache purge
+
+popd
