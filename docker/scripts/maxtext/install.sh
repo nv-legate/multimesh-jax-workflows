@@ -2,7 +2,8 @@
 
 set -e
 
-pushd /opt/workspace/maxtext
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+pushd ${SCRIPT_DIR}
 
 conda run -n legere conda install -c conda-forge -y git pkg-config
 
