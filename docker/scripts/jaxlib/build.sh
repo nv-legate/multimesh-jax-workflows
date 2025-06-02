@@ -4,7 +4,7 @@ set -e
 
 pushd /opt/workspace/jax
 
-BAZEL_CACHE=$1
+BAZEL_CACHE=${1:-grpc://host.docker.internal:9092}
 
 export PYTHON_BIN_PATH=/opt/install/miniconda/envs/legere/bin/python
 export USE_DEFAULT_PYTHON_LIB_PATH=1

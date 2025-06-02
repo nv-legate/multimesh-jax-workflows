@@ -926,11 +926,12 @@ with multimesh.jax.context(
 
     if args.hlo is None:
         import jaxlib
+        import jax
 
         # sys.argv = argv
         try:
             train.main(argv)
-        except jaxlib.xla_extension.XlaRuntimeError as e:
+        except jax.lib.xla_extension.XlaRuntimeError as e:
             need_throw = True
             if args.dump_only:
                 path = Path(args.dump)
