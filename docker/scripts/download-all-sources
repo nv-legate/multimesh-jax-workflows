@@ -11,6 +11,7 @@
 
 WORKDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
+# TODO: handle different Ubuntu releases
 sed -i 's/^# deb-src/deb-src/' /etc/apt/sources.list
 apt-get update
 

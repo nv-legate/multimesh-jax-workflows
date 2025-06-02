@@ -11,7 +11,7 @@ import runpy
 import subprocess as sp
 import sys
 from pathlib import Path
-
+from ast import literal_eval
 import yaml
 
 try:
@@ -233,8 +233,15 @@ mm_jax.add_argument(
 mm_jax.add_argument(
     "--schedule",
     type=str,
-    choices=["fill-drain", "gpipe", "1f1b", "wavefront", "prefetch-wavefront"],
+    default=None,
+    choices=["fill-drain", "gpipe", "1f1b", "wavefront", "prefetch-wavefront", "custom"],
     help="The microbatch schedule to use",
+)
+mm_jax.add_argument(
+    "--custom-schedule-path",
+    type=str,
+    default=None,
+    help="The path to the custom schedule to use. The schedule should be written as a python object in plaintext",  # noqa: E501
 )
 mm_jax.add_argument(
     "--microbatch-size",
@@ -453,6 +460,38 @@ if args.gpus > 0:
         hardware = "gpu"
 else:
     hardware = "cpu"
+
+custom_schedule_list = None
+if args.custom_schedule_path is not None:
+    if args.schedule is not None and args.schedule != "custom":
+        raise ValueError(
+            f"When custom_schedule_path is provided, schedule must be 'custom' or None, but got '{args.schedule}'"
+        )
+    # Set schedule to "custom" by default when custom_schedule is provided
+    args.schedule = "custom"
+    with open(args.custom_schedule_path) as f:
+        custom_schedule_list = f.read()
+
+    custom_schedule_list = literal_eval(custom_schedule_list)
+
+    if custom_schedule_list is None:
+        raise Exception("--custom-schedule-path must contain a valid python object")
+
+    if type(custom_schedule_list) != list:
+        raise Exception("--custom-schedule must be a list of lists of tuples (stage, task)")
+
+    for stage in custom_schedule_list:
+        if type(stage) != list:
+            raise Exception("--custom-schedule must be a list of lists of tuples (stage, task)")
+        for task in stage:
+            if type(task) != tuple and type(task) != str:
+                raise Exception("--custom-schedule must be a list of lists of tuples (stage, task)")
+args.schedule = args.schedule or "wavefront"
+
+# revert support for args.schedule until next release
+# TODO: add back support
+if args.schedule == "custom":
+  raise ValueError("custom schedules not yet supported in current release")
 
 if args.dump_only:
     # forces a debug mode on the run where the HLO module
@@ -803,17 +842,24 @@ argv.append(f"hardware={hardware}")
 
 # parallelism has to be split betweeen the ICI and DCN
 # explicitly for maxtext
-if args.gpus > 1:
-  num_local_devices = len(
-      sp.check_output(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"])
-      .decode("utf-8")
-      .splitlines()
-  )
+if args.gpus > 0:
+    try:
+        num_local_devices = len(
+            sp.check_output(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"])
+            .decode("utf-8")
+            .splitlines()
+        )
+    except sp.CalledProcessError:
+        sys.exit("GPUs were requested with --gpus, but nvidia-smi failed to run")
+    finally:
+        if num_local_devices == 0:
+          sys.exit("GPUs were requested with --gpus, but nvidia-smi shows no devices")
+        if num_local_devices < args.gpus:
+          sys.exit(f"{args.gpus} GPUs were requested with --gpus, but nvidia-smi"
+                   f" shows only {num_local_devices} devices")
 else:
-  num_local_devices = args.cpus
-
-if args.gpus == 0 or num_local_devices == 0:
     num_local_devices = args.cpus
+
 total_nodes = total_devices // num_local_devices
 
 

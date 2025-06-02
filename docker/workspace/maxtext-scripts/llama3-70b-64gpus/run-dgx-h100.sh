@@ -34,8 +34,8 @@ mem_binding="${mems[$intra_node_rank]}"
 # run training
 numactl --physcpubind $cpu_binding \
         --membind $mem_binding \
-python /workspace/cwd/run.py \
-    --fbmem 78 \
+python /opt/maxtext/run.py \
+    --fbmem 77 \
     --cpus 1 \
     --gpus 1 \
     --nodes 64 \

@@ -24,7 +24,7 @@ echo "conda activate legere" >> /root/.bashrc
 
 conda run --no-capture-out -n legere \
   conda install -c conda-forge -y \
-    python==3.12 \
+    python==3.10 \
     cmake==3.31 \
     openssh
 

@@ -4,7 +4,7 @@
   shallow = true
 [submodule "docker/maxtext"]
   path = docker/maxtext
-	url = https://github.com/AI-Hypercomputer/maxtext.git
+  url = git@github.com:nv-legate/maxtext.git
   shallow = true
 [submodule "docker/te"]
   path = docker/te

@@ -1,8 +1,6 @@
 #! /usr/bin/env bash
 
-apt-get update
-
-apt-get install numactl
+apt-get install -y --no-install-recommends numactl
 
 for arg in "$@"; do
  case "$arg" in
@@ -20,8 +18,8 @@ if [ ! -z $nsys ]; then
   wget https://developer.nvidia.com/downloads/assets/tools/secure/nsight-systems/2024_1/nsight-systems-2024.1.1_2024.1.1.59-1_amd64.deb
   apt-get update
   dpkg --configure -a
-  apt-get -y -f install
-  apt-get -y install nsight-systems-2024.1.1 --reinstall
+  apt-get -y -f install --no-install-recommends
+  apt-get -y install nsight-systems-2024.1.1 --reinstall --no-install-recommends
 
   mkdir -p /root/.config/NVIDIA\ Corporation
   echo "CuptiUsePerThreadBuffer=false" > /root/.config/NVIDIA\ Corporation/nsys-config.ini

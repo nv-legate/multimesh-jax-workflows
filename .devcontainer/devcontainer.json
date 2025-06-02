@@ -8,7 +8,6 @@
     "source=${localEnv:HOME}/.cache/ccache/realm,target=/ccache/realm,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.cache/ccache/zuku,target=/ccache/zuku,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.cache/ccache/multimesh-jax,target=/ccache/multimesh-jax,type=bind,consistency=cached",
-    "source=${localWorkspaceFolder}/maxtext,target=/opt/workspace/maxtext-scripts,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/docker/workspace/mount,target=/opt/workspace/mount,type=bind,consistency=cached"
   ],
   "image": "ghcr.io/nv-legate/multimesh-jax-dev:devcontainer_base",

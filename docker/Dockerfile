@@ -1,11 +1,13 @@
 ARG CUDA_VERSION="12.8.1"
 ARG CUDNN_VERSION=""
-ARG JAX_PLUGIN_BASE="editable_install_zuku"
+ARG FINAL_IMAGE_BASE=distribute
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-devel-ubuntu22.04 AS base
 
 SHELL [ "/bin/bash", "-eo", "pipefail", "-c" ]
 
 ENV CUDA_PATH="/usr/local/cuda/lib64/stubs"
+RUN --mount=type=bind,source=scripts/apt,target=/opt/apt \
+  /opt/apt/install.sh
 
 FROM base AS nccl_build
 COPY nccl /opt/nccl
@@ -201,6 +203,9 @@ COPY ucc /opt/source/ucc
 COPY ucx /opt/source/ucx
 COPY te /opt/source/te
 COPY workspace/xla /opt/source/xla
+
+FROM ${FINAL_IMAGE_BASE} as final_image
+COPY workspace/maxtext-scripts/run.py /opt/maxtext/run.py
 
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]

@@ -46,7 +46,7 @@ repos = {
             "main",
         ),  # noqa: E501
         "devel": (
-            "ssh://git@gitlab-master.nvidia.com:12051/legate/maxtext-fork.git",  # noqa: E501
+            "ssh://git@github.com:nv-legate/maxtext.git",
             "legate-main",
         ),
     },

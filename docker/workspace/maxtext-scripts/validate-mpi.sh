@@ -9,15 +9,20 @@ export TF_NUM_INTEROP_THREADS=1
 export TF_NUM_INTRAOP_THREADS=1
 export TF_CPP_MIN_LOG_LEVEL=0
 export TF_CPP_MAX_LOG_LEVEL=1
+export CUDA_VISIBLE_DEVICES=${OMPI_COMM_WORLD_RANK}
+export UCX_TLS=^mm
+
+num_gpus_available=`nvidia-smi --query-gpu=name --format=csv,noheader | wc -l`
+gpus=${1:-$num_gpus_available}
 
 python ./run.py \
-   --cpus 2 \
-   --gpus 2 \
+   --cpus 1 \
+   --gpus 1 \
    --fbmem 20 \
    --sysmem 20 \
-   --nodes 1 \
+   --nodes $gpus \
    --dp 1 \
-   --tp 2 \
+   --tp $gpus \
    --pp 1 \
    --fsdp 1 \
    --num-layers 4 \
