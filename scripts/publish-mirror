@@ -144,7 +144,6 @@ def compress(name, repo, prev_tag, tag):
 
 def change_submodule_url(folder, url):
     cmd = f"git submodule set-url {folder} {url}"
-    print(cmd)
     os.system(cmd)
 
 
@@ -152,14 +151,14 @@ docker = Path("docker")
 workspace = docker / "workspace"
 
 patched = [
-#    "xla",
-#    "jax",
+    "xla",
+    "jax",
     "maxtext",
 ]
 
 mirrored = [
-#    "zuku",
-#    "multimesh-jax",
+    "zuku",
+    "multimesh-jax",
 ]
 
 
@@ -207,8 +206,8 @@ os.system(f"git reset --soft {prev_commit}")
 os.system("git add -u")
 os.system(f"git commit -m '{new_branch}'")
 os.system(f"git tag -f {tag}")
-os.system(f"git push -f {mirror} {new_branch}")
-os.system(f"git push -f {mirror} {tag}")
+#os.system(f"git push -f {mirror} {new_branch}")
+#os.system(f"git push -f {mirror} {tag}")
 
 # for now, do not auto-update the default branch
 # os.system(f"gh repo edit {mirror} --default-branch {new_branch}")

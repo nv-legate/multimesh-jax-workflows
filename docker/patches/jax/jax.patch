@@ -1,5 +1,5 @@
 diff --git a/jax/_src/array.py b/jax/_src/array.py
-index 47bf85661..325b8cc13 100644
+index 47bf85661a..325b8cc13e 100644
 --- a/jax/_src/array.py
 +++ b/jax/_src/array.py
 @@ -104,7 +104,7 @@ class Shard:
@@ -37,7 +37,7 @@ index 47bf85661..325b8cc13 100644
    candidates = defaultdict(list)
    bufs = [buf.data for buf in x.addressable_shards]
 diff --git a/jax/_src/custom_partitioning.py b/jax/_src/custom_partitioning.py
-index 9bd2bb6a7..e1ef22a92 100644
+index 9bd2bb6a70..e1ef22a92c 100644
 --- a/jax/_src/custom_partitioning.py
 +++ b/jax/_src/custom_partitioning.py
 @@ -532,16 +532,17 @@ def _custom_partitioning_lowering_rule(ctx: mlir.LoweringRuleContext, *values,
@@ -71,7 +71,7 @@ index 9bd2bb6a7..e1ef22a92 100644
    _sharding_callbacks[bytes(key, 'utf8')] = sharding_callback_info
    # We need to make sure `sharding_callback_info` is still alive when the SPMD
 diff --git a/jax/_src/distributed.py b/jax/_src/distributed.py
-index af50e2e9e..8f567d3cf 100644
+index af50e2e9e3..8f567d3cf8 100644
 --- a/jax/_src/distributed.py
 +++ b/jax/_src/distributed.py
 @@ -50,9 +50,9 @@ class State:
@@ -95,7 +95,7 @@ index af50e2e9e..8f567d3cf 100644
      self.client.connect()
  
 diff --git a/jax/_src/interpreters/mlir.py b/jax/_src/interpreters/mlir.py
-index 1370bb943..bd2e49edf 100644
+index 1370bb943c..bd2e49edfa 100644
 --- a/jax/_src/interpreters/mlir.py
 +++ b/jax/_src/interpreters/mlir.py
 @@ -1010,7 +1010,8 @@ class LoweringResult(NamedTuple):
@@ -147,7 +147,7 @@ index 1370bb943..bd2e49edf 100644
  
  def cache_lowering(f):
 diff --git a/jax/_src/interpreters/pxla.py b/jax/_src/interpreters/pxla.py
-index 291d45e34..94bd2b7d1 100644
+index 291d45e347..94bd2b7d14 100644
 --- a/jax/_src/interpreters/pxla.py
 +++ b/jax/_src/interpreters/pxla.py
 @@ -71,6 +71,7 @@ from jax._src.sharding_impls import (
@@ -313,7 +313,7 @@ index 291d45e34..94bd2b7d1 100644
      in_shardings = finalize_shardings(in_shardings, da)
      out_shardings = finalize_shardings(out_shardings, da)
 diff --git a/jax/_src/op_shardings.py b/jax/_src/op_shardings.py
-index 6b248736c..c578e40c1 100644
+index 6b248736ce..c578e40c14 100644
 --- a/jax/_src/op_shardings.py
 +++ b/jax/_src/op_shardings.py
 @@ -59,6 +59,10 @@ def are_op_shardings_equal(op1: xc.OpSharding | xc.HloSharding,
@@ -341,7 +341,7 @@ index 6b248736c..c578e40c1 100644
  
  
 diff --git a/jax/_src/pjit.py b/jax/_src/pjit.py
-index 9bc83a5a3..a1863daf6 100644
+index 9bc83a5a39..a1863daf64 100644
 --- a/jax/_src/pjit.py
 +++ b/jax/_src/pjit.py
 @@ -65,6 +65,8 @@ from jax._src.lib import jax_jit
@@ -406,7 +406,7 @@ index 9bc83a5a3..a1863daf6 100644
    assert sharding._parsed_pspec is not None
    return {i for i, axes in enumerate(sharding._parsed_pspec)
 diff --git a/jax/_src/prng.py b/jax/_src/prng.py
-index e40e2f6ac..ab29d4a86 100644
+index e40e2f6acd..ab29d4a86b 100644
 --- a/jax/_src/prng.py
 +++ b/jax/_src/prng.py
 @@ -937,10 +937,10 @@ mlir.register_lowering(
@@ -425,7 +425,7 @@ index e40e2f6ac..ab29d4a86 100644
      threefry2x32_p,
      partial(_threefry2x32_gpu_lowering_rule, gpu_prng.rocm_threefry2x32),
 diff --git a/jax/_src/sharding.py b/jax/_src/sharding.py
-index a9bf62b46..2092af676 100644
+index a9bf62b464..2092af6769 100644
 --- a/jax/_src/sharding.py
 +++ b/jax/_src/sharding.py
 @@ -47,10 +47,14 @@ def common_devices_indices_map(
@@ -447,7 +447,7 @@ index a9bf62b46..2092af676 100644
  @cache(max_size=4096, trace_context_in_key=False)
  def _common_shard_shape(self, global_shape: Shape) -> Shape:
 diff --git a/jax/_src/sharding_impls.py b/jax/_src/sharding_impls.py
-index a73f26f3c..b361b26f9 100644
+index a73f26f3c1..b361b26f9f 100644
 --- a/jax/_src/sharding_impls.py
 +++ b/jax/_src/sharding_impls.py
 @@ -385,7 +385,9 @@ def _op_sharding_to_pos_sharding(
@@ -462,7 +462,7 @@ index a73f26f3c..b361b26f9 100644
    p = p.reshape(op_sharding.tile_assignment_dimensions())
    if op_sharding.replicate_on_last_tile_dim():
 @@ -1233,6 +1235,8 @@ def create_mesh_pspec_sharding(
-
+ 
  def _gspmd_to_named_sharding_via_mesh(
      out_s: GSPMDSharding, mesh: mesh_lib.Mesh) -> NamedSharding:
 +  if len(out_s._hlo_sharding.tile_assignment_devices()) != mesh.ndevices:
@@ -471,7 +471,7 @@ index a73f26f3c..b361b26f9 100644
        out_s._hlo_sharding, mesh)[0]
    return create_mesh_pspec_sharding(
 diff --git a/jax/_src/test_util.py b/jax/_src/test_util.py
-index 9f2bab2b4..0983e7f78 100644
+index 9f2bab2b4c..0983e7f786 100644
 --- a/jax/_src/test_util.py
 +++ b/jax/_src/test_util.py
 @@ -1290,7 +1290,7 @@ class JaxTestCase(parameterized.TestCase):
@@ -484,7 +484,7 @@ index 9f2bab2b4..0983e7f78 100644
      'jax_legacy_prng_key': 'error',
    }
 diff --git a/jax/_src/xla_bridge.py b/jax/_src/xla_bridge.py
-index 33b46145d..58da43d80 100644
+index 33b46145de..58da43d80e 100644
 --- a/jax/_src/xla_bridge.py
 +++ b/jax/_src/xla_bridge.py
 @@ -586,6 +586,10 @@ def discover_pjrt_plugins() -> None:
@@ -528,7 +528,7 @@ index 33b46145d..58da43d80 100644
  def known_platforms() -> set[str]:
    platforms = set()
 diff --git a/jax/experimental/multihost_utils.py b/jax/experimental/multihost_utils.py
-index 2bde1fbea..925bdff25 100644
+index 2bde1fbead..925bdff257 100644
 --- a/jax/experimental/multihost_utils.py
 +++ b/jax/experimental/multihost_utils.py
 @@ -157,11 +157,11 @@ def process_allgather(in_tree: Any, tiled: bool = False) -> Any:
@@ -549,7 +549,7 @@ index 2bde1fbea..925bdff25 100644
  
  def reached_preemption_sync_point(step_id: int) -> bool:
 diff --git a/tests/lax_control_flow_test.py b/tests/lax_control_flow_test.py
-index 175b96a9c..9500a41d1 100644
+index 175b96a9c5..9500a41d1f 100644
 --- a/tests/lax_control_flow_test.py
 +++ b/tests/lax_control_flow_test.py
 @@ -2001,6 +2001,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
@@ -561,7 +561,7 @@ index 175b96a9c..9500a41d1 100644
      d = 0.75
      def f(c, a):
 diff --git a/tests/lax_numpy_einsum_test.py b/tests/lax_numpy_einsum_test.py
-index ea7bff1d0..3c58374b4 100644
+index ea7bff1d09..3c58374b47 100644
 --- a/tests/lax_numpy_einsum_test.py
 +++ b/tests/lax_numpy_einsum_test.py
 @@ -254,6 +254,12 @@ class EinsumTest(jtu.JaxTestCase):
@@ -578,7 +578,7 @@ index ea7bff1d0..3c58374b4 100644
      if '->' in einstr:
        input_str, result_names = einstr.split('->')
 diff --git a/tests/lax_numpy_test.py b/tests/lax_numpy_test.py
-index 45698d3b1..3751dbc90 100644
+index 45698d3b10..3751dbc90a 100644
 --- a/tests/lax_numpy_test.py
 +++ b/tests/lax_numpy_test.py
 @@ -739,6 +739,12 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
@@ -684,7 +684,7 @@ index 45698d3b1..3751dbc90 100644
      self.assertRaises(TypeError, lambda: jnp.arange())
  
 diff --git a/tests/pjit_test.py b/tests/pjit_test.py
-index bfb9451bd..1a349674f 100644
+index bfb9451bd6..4554623e53 100644
 --- a/tests/pjit_test.py
 +++ b/tests/pjit_test.py
 @@ -71,17 +71,23 @@ jtu.request_cpu_devices(8)
@@ -877,7 +877,7 @@ index bfb9451bd..1a349674f 100644
      self.assertEqual(out2.shape, (8, 2))
  
 +  # single device pjit dispatch does not work
-+  # when you are running with multiple GPUs on multimesh
++  # when you are running with multiple GPUs
 +  @jtu.skip_on_devices("multimesh")
    def test_single_device_pjit_cpp_dispatch(self):
      shape = (8, 2)
@@ -887,7 +887,7 @@ index bfb9451bd..1a349674f 100644
      self.assertEqual(count(), 1)
  
 +  # single device pjit dispatch does not work
-+  # when you are running with multiple GPUs on multimesh
++  # when you are running with multiple GPUs
 +  @jtu.skip_on_devices("multimesh")
    def test_single_device_add_single_compile(self):
      f1 = pjit(lambda x, y: x + y)
