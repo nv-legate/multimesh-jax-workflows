@@ -3,4 +3,4 @@
 #                         All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-./build.py --stage distribute --tag $1 --repo ghcr.io/nv-legate --upload --name multimesh-jax
+./build.py --stage final_image --tag $1 --repo ghcr.io/nv-legate --upload --name multimesh-jax

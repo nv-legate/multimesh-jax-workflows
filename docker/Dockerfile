@@ -206,6 +206,7 @@ COPY workspace/xla /opt/source/xla
 
 FROM ${FINAL_IMAGE_BASE} as final_image
 COPY workspace/maxtext-scripts/run.py /opt/maxtext/run.py
+COPY workspace/multimesh-jax /opt/workspace/multimesh-jax
 
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]

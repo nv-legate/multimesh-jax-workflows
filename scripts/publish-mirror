@@ -152,14 +152,14 @@ docker = Path("docker")
 workspace = docker / "workspace"
 
 patched = [
-    "xla",
-    "jax",
+#    "xla",
+#    "jax",
     "maxtext",
 ]
 
 mirrored = [
-    "zuku",
-    "multimesh-jax",
+#    "zuku",
+#    "multimesh-jax",
 ]
 
 
