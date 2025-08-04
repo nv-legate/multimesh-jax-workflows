@@ -7,11 +7,11 @@ import argparse
 import glob
 import os
 import re
-import runpy
 import subprocess as sp
 import sys
-from pathlib import Path
 from ast import literal_eval
+from pathlib import Path
+
 import yaml
 
 try:
@@ -176,18 +176,6 @@ mm_jax.add_argument(
     choices=["none", "info", "debug", "spew"],
     help="The debug level",
 )
-mm_jax.add_argument(
-    "--only-fuse-loop-tasks",
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help="Only fuse tasks inside loops",
-)
-mm_jax.add_argument(
-    "--fuse-tasks",
-    action=argparse.BooleanOptionalAction,
-    default=True,
-    help="Only fuse tasks inside loops",
-)
 xla_debug_levels = {
     None: 0,
     "info": 1,
@@ -205,6 +193,12 @@ mm_jax.add_argument(
     type=int,
     default=1,
     help="The degree of tensor parallelism",
+)
+mm_jax.add_argument(
+    "--ep",
+    type=int,
+    default=1,
+    help="The degree of expert parallelism",
 )
 mm_jax.add_argument(
     "--fsdp",
@@ -225,16 +219,18 @@ mm_jax.add_argument(
     help="The amount of interleaving (circular scheduling)",
 )
 mm_jax.add_argument(
-    "--sequence-parallel",
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help="Whether to use sequence parallelism",  # noqa: E501
-)
-mm_jax.add_argument(
     "--schedule",
     type=str,
     default=None,
-    choices=["fill-drain", "gpipe", "1f1b", "wavefront", "prefetch-wavefront", "custom"],
+    choices=[
+        "fill-drain",
+        "gpipe",
+        "1f1b",
+        "wavefront",
+        "prefetch-wavefront",
+        "custom",
+        "zero-bubble-h2",
+    ],
     help="The microbatch schedule to use",
 )
 mm_jax.add_argument(
@@ -247,19 +243,7 @@ mm_jax.add_argument(
     "--microbatch-size",
     type=int,
     default=None,
-    help="The size of the per-node microbatch to use. This is microbatch size per tensor-parallel domain, independent of data parallelism or FSDP. Default is to match the global batch size",  # noqa: E501
-)
-mm_jax.add_argument(
-    "--hlo",
-    type=str,
-    default=None,
-    help="Path to an HLO module to compile. This starts an HLO module compilation test rather than a full PaxML run",  # noqa: E501
-)
-mm_jax.add_argument(
-    "--dump-only",
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help="Whether to only dump HLO modules without full execution",
+    help="The size of the per-node microbatch to use. This is microbatch size per tensor-parallel domain, independent of data parallelism. Default is to match the global batch size",  # noqa: E501
 )
 mm_jax.add_argument(
     "--dump",
@@ -279,13 +263,25 @@ mm_jax.add_argument(
     default=False,
     help="Whether to dump all intermediate HLO modules",
 )
-
 mm_jax.add_argument(
     "--replicate-small-params",
     action=argparse.BooleanOptionalAction,
     default=True,
     help="Replicate all smaller than batch*squence_length",
 )
+mm_jax.add_argument(
+    "--load-balance-embeddings",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Whether to rotate embedding computation across slices of global mesh"
+)
+mm_jax.add_argument(
+    "--load-balance-decoder-norm",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Whether to rotate decoder norm computation across slices of global mesh"
+)
+
 
 # Maxtext parameters
 ####################################################
@@ -417,6 +413,21 @@ maxtext.add_argument(
     help="Whether to wrap repeated layers in a while-loop (True) or unroll (False)",  # noqa: E501
 )
 
+maxtext.add_argument(
+    "--sparse-matmul",
+    dest="sparse_matmul",
+    default=False,
+    action=argparse.BooleanOptionalAction,
+    help="Whether to use sparse (True) or dense (False) matmul in MoE layers"
+)
+
+maxtext.add_argument(
+    "--capacity-factor",
+    type=float,
+    dest="capacity_factor",
+    default=-1,
+    help="Capacity factor for expert token dropping, default to no dropping",
+)
 
 maxtext.add_argument(
     "--use-tfds-dataset",
@@ -445,6 +456,38 @@ maxtext.add_argument(
     dest="dataset_name",
     default=None,
     help="Name of TFDS dataset to use",
+)
+
+maxtext.add_argument(
+    "--perform-eval",
+    dest="perform_eval",
+    default=False,
+    action=argparse.BooleanOptionalAction,
+    help="Whether to perform evaluation using validation slice of dataset"
+)
+
+maxtext.add_argument(
+    "--eval-interval",
+    dest="eval_interval",
+    type=int,
+    default=None,
+    help="Number of train steps between each evaluation"
+)
+
+maxtext.add_argument(
+    "--eval-steps",
+    dest="eval_steps",
+    type=int,
+    default=None,
+    help="Number of steps to run per evaluation"
+)
+
+maxtext.add_argument(
+    "--eval-batch-size",
+    dest="eval_batch_size",
+    type=int,
+    default=None,
+    help="Batch size for each evaluation step"
 )
 
 ############################################
@@ -478,36 +521,26 @@ if args.custom_schedule_path is not None:
         raise Exception("--custom-schedule-path must contain a valid python object")
 
     if type(custom_schedule_list) != list:
-        raise Exception("--custom-schedule must be a list of lists of tuples (stage, task)")
+        raise Exception(
+            "--custom-schedule must be a list of lists of tuples (stage, task)"
+        )
 
     for stage in custom_schedule_list:
         if type(stage) != list:
-            raise Exception("--custom-schedule must be a list of lists of tuples (stage, task)")
+            raise Exception(
+                "--custom-schedule must be a list of lists of tuples (stage, task)"
+            )
         for task in stage:
             if type(task) != tuple and type(task) != str:
-                raise Exception("--custom-schedule must be a list of lists of tuples (stage, task)")
+                raise Exception(
+                    "--custom-schedule must be a list of lists of tuples (stage, task)"
+                )
 args.schedule = args.schedule or "wavefront"
 
 # revert support for args.schedule until next release
 # TODO: add back support
 if args.schedule == "custom":
-  raise ValueError("custom schedules not yet supported in current release")
-
-if args.dump_only:
-    # forces a debug mode on the run where the HLO module
-    # is generated from a single CPU run
-    args.cpus = 1
-    args.gpus = 0
-    args.pp = 1
-    args.tp = 1
-    args.dp = 1
-    args.fsdp = 1
-    args.nodes = 1
-    if args.batch_size is None:
-        raise ValueError(
-            "must give explicit --batch-size when using --dump-only"
-        )  # noqa: E501
-
+    raise ValueError("custom schedules not yet supported in current release")
 
 # setup environment variables
 #############################
@@ -553,7 +586,7 @@ if args.backend == "multimesh":
     env["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 xla_flags = [
-    "--xla_disable_hlo_passes=rematerialization",
+    "--xla_disable_hlo_passes=rematerialization,hlo-verifier",
     f"--xla_gpu_enable_nccl_comm_splitting={str(args.use_nccl_comm_split).lower()}",  # noqa: E501
     f"--xla_force_host_platform_device_count={args.cpus}",
     f"--xla_gpu_enable_latency_hiding_scheduler={args.latency_hiding_scheduler}",  # noqa: E501
@@ -587,8 +620,6 @@ if args.collective_matmul is not None:
 if args.hoist_loop_convert:
     os.environ["MULTIMESH_HOIST_CONVERT"] = "1"
 
-if args.dump_only and args.dump is None:
-    raise ValueError("--dump-only requsted, but no older passed to --dump")
 if args.dump:
     xla_flags = xla_flags + [
         f"--xla_dump_to={args.dump}",
@@ -611,7 +642,7 @@ env["XLA_FLAGS"] = " ".join(xla_flags)
 
 # validate parallelism / device count
 num_nodes = args.nodes or 1
-total_parallelism = args.tp * args.pp * args.dp * args.fsdp
+total_parallelism = args.tp * args.ep * args.pp * args.dp * args.fsdp
 if args.gpus == 0:
     devices_per_node = args.cpus
 else:
@@ -620,13 +651,13 @@ total_devices = devices_per_node * num_nodes
 
 if total_parallelism != total_devices:
     raise ValueError(
-        f"PP={args.pp} DP={args.dp} TP={args.tp} FSDP={args.fsdp} does not multiply to total no. of GPUS {total_devices}"  # noqa: E501
+        f"PP={args.pp} DP={args.dp} EP={args.ep} TP={args.tp} FSDP={args.fsdp} does not multiply to total no. of GPUS {total_devices}"  # noqa: E501
     )
 
 # 2 perdevice if batch size is unspecified
 batch_size = args.batch_size or total_devices * 2
 mb_size = args.microbatch_size or batch_size
-global_mb_size = mb_size * args.dp * args.fsdp
+global_mb_size = mb_size * args.dp
 per_device_batch_size = batch_size // total_devices
 devices_per_stage = total_devices // args.pp
 transformer_num_devices = devices_per_stage
@@ -643,11 +674,15 @@ if args.num_layers is None:
 else:
     if args.num_layers % num_stages != 0:
         if args.num_layers < num_stages:
-            error_str = f"Number of layers ({args.num_layers}) must be >= " \
-                        f"product of pp ({args.pp}) and interleave ({args.interleave})"
+            error_str = (
+                f"Number of layers ({args.num_layers}) must be >= "
+                f"product of pp ({args.pp}) and interleave ({args.interleave})"
+            )
         else:
-            error_str = f"Number of layers ({args.num_layers}) must be divisible " \
-                        f"by pp ({args.pp}) and interleave ({args.interleave})"
+            error_str = (
+                f"Number of layers ({args.num_layers}) must be divisible "
+                f"by pp ({args.pp}) and interleave ({args.interleave})"
+            )
         raise ValueError(error_str)
 
     base_num_decoder_layers = args.num_layers
@@ -660,6 +695,13 @@ if batch_size % total_devices:
         f"does not divide batch_size={batch_size}"
     )
 
+# ensure batch-consuming parallelism has enough samples
+if mb_size // args.fsdp == 0 or mb_size // args.ep == 0:
+    batch_str = "Microbatch" if args.microbatch_size else "Batch"
+    raise ValueError(
+        f"{batch_str} size of {mb_size} is insufficient for "
+        f"at least one of FSDP={args.fsdp} or EP={args.ep}"
+    )
 
 if args.pp > 1:
     print(f"Pipeline parallelism with pp = {args.pp} enabled")
@@ -678,14 +720,11 @@ print(f"batch_size = {batch_size}")
 print(f"mb_size_per_node = {mb_size}")
 print(f"global_mb_size = {global_mb_size}")
 
-
 for key, val in env.items():
     os.environ[key] = str(val)
     print(f"env {key}={val}")
 
 sys.path.append("/opt/maxtext/MaxText/")
-
-import multimesh.jax  # noqa: E402
 
 # initialize multimesh.jax
 if args.backend == "multimesh":
@@ -701,78 +740,70 @@ if args.backend == "multimesh":
         realm_argv=realm_argv,
     )
 
-    devices = list(range(total_devices))
-
-    transformer_axes = [
-        ("data", "x"),
-        ("stage", "y"),
-        ("fsdp", "y"),
-        ("fsdp_transpose", "y"),
-    ]
-
-    if args.sequence_parallel:
-        transformer_axes.append(("sequence", "z"))
-        transformer_axes.append(("tensor", "z"))
-    else:
-        transformer_axes.append(("tensor", "z"))
-        transformer_axes.append(("sequence", "z"))
-
-    transformer_axes += [
-        ("autoregressive", "z"),
-        ("data", "z"),
-    ]
-
-    transformer_x_dim = args.dp
-    transformer_y_dim = args.fsdp
-    transformer_z_dim = args.tp
-    transformer_mesh = [
-        transformer_x_dim,
-        transformer_y_dim,
-        transformer_z_dim,
-    ]
-
-    num_devices_for_all_loops = transformer_num_devices
-
     # register tasks
-    import train
-    from multimesh.jax import register_task
+    from MaxText import train
+    from multimesh.jax import register_task, Task
 
-    if args.pp == 1 and global_mb_size == batch_size:
-        # just default transformer parallelism
-        register_task(
-            "default",
-            devices=devices[:transformer_num_devices],
-            dims=transformer_mesh,
-            device_axes=["x", "y", "z"],
-            logical_axes=transformer_axes,
+    layer_regex = re.compile(r"layers_(\d+)")
+
+    def callback(name: str, backprop: bool):
+        layer = int(layer_regex.search(name).groups()[0])
+        pipeline_stage = layer // layers_per_stage
+        if layers_per_interleave is not None:
+            # layer offset within an interleave
+            slice = (layer % layers_per_interleave) // layers_per_stage
+        else:
+            slice = pipeline_stage
+        suffix = "bwd" if backprop else "fwd"
+        split_backprop = None
+        if args.schedule == "zero-bubble-h2" and backprop:
+            split_backprop = ("_activations", "_gradients")
+        return Task(
+            mesh_slice={"stage" : slice},
+            name=f"stage_{pipeline_stage}_{suffix}",
+            extra_axes=(("sequence", "tensor"),),
+            split_backprop=split_backprop,
         )
-    else:  # pp > 1 or microbatching
-        train.set_mb_config(global_mb_size, args.schedule, num_stages, args.interleave)
-        layer_regex = re.compile(r"layers_(\d+)")
 
-        def compute_devices(name: str, backprop: bool):
-            layer = int(layer_regex.search(name).groups()[0])
-            pipeline_stage = layer // layers_per_stage
-            if layers_per_interleave is not None:
-                # layer offset within an interleave
-                mesh = (layer % layers_per_interleave) // layers_per_stage
-            else:
-                mesh = pipeline_stage
-            offset = transformer_num_devices * mesh
-            stop = offset + transformer_num_devices
+    register_task(
+        r"(layers_\d+)",
+        callback=callback
+    )
+
+    if args.load_balance_embeddings:
+        def emb_callback(name: str, backprop: bool):
             suffix = "bwd" if backprop else "fwd"
-            color = f"stage_{pipeline_stage}_{suffix}"
-            return (offset, stop), color
+            return Task(
+                mesh_slice={"stage" : 0},
+                name=f"emb_{suffix}",
+                loop_dependent_mesh_slice=lambda i: {"stage" : i % args.pp}
+            )
 
         register_task(
-            r"(layers_\d+)",
-            callback=compute_devices,
-            dims=transformer_mesh,
-            device_axes=["x", "y", "z"],
-            logical_axes=transformer_axes,
+            r"(emb).*",
+            callback=emb_callback
         )
 
-import maxtext_utils as mu  # noqa: E402 must come after multimesh init
+    if args.load_balance_decoder_norm:
+        def decoder_norm_callback(name: str, backprop: bool):
+            suffix = "bwd" if backprop else "fwd"
+            return Task(
+                mesh_slice={"stage" : 0},
+                name=f"decoder_norm_{suffix}",
+                loop_dependent_mesh_slice=lambda i: {"stage" : i % args.pp}
+            )
+
+        register_task(
+            r"(decoder_norm).*",
+            callback=decoder_norm_callback
+        )
+
+
+    if args.pp > 1 or global_mb_size < batch_size:
+        train.set_mb_config(global_mb_size, args.schedule, num_stages, args.interleave)
+
+
+from MaxText import maxtext_utils as mu  # noqa: E402 must come after multimesh init
 
 maxtext_base = Path(mu.__file__).parent
 
@@ -797,6 +828,10 @@ argv = [
     "monitor_goodput=False",
     "enable_goodput_recording=False",
     "enable_tensorboard=True",
+    "override_model_config=True",
+    "megablox=False",
+    f"sparse_matmul={args.sparse_matmul}",
+    f"capacity_factor={args.capacity_factor}",
 ]
 
 if args.model_name is None:
@@ -829,6 +864,7 @@ if args.use_tfds_dataset:
         argv.append("dataset_type=tfds")
         argv.append(f"dataset_path={args.dataset_path}")
         argv.append(f"dataset_name={args.dataset_name}")
+        argv.append(f"eval_dataset_name={args.dataset_name}")
         argv.append(f"tokenizer_path={args.tokenizer_path}")
     else:
         raise ValueError(
@@ -837,6 +873,25 @@ if args.use_tfds_dataset:
         )
 else:
     argv.append("dataset_type=synthetic")
+
+if args.perform_eval:
+    if args.eval_interval and args.eval_steps and args.eval_batch_size:
+        if args.eval_batch_size % total_devices != 0:
+            raise ValueError(
+                f"No support for partial batches, gpus={total_devices} "
+                f"does not divide eval_batch_size={args.eval_batch_size}"
+            )
+        
+        # valid arguments, configure evaluation
+        eval_per_device_batch_size = args.eval_batch_size // total_devices
+        argv.append(f"eval_interval={args.eval_interval}")
+        argv.append(f"eval_steps={args.eval_steps}")
+        argv.append(f"eval_per_device_batch_size={eval_per_device_batch_size}")
+    else:
+        raise ValueError(
+            "If --perform-eval is enabled, must define "
+            "--eval-interval, --eval-steps, and --eval-batch-size"
+        )
 
 argv.append(f"hardware={hardware}")
 
@@ -853,10 +908,12 @@ if args.gpus > 0:
         sys.exit("GPUs were requested with --gpus, but nvidia-smi failed to run")
     finally:
         if num_local_devices == 0:
-          sys.exit("GPUs were requested with --gpus, but nvidia-smi shows no devices")
+            sys.exit("GPUs were requested with --gpus, but nvidia-smi shows no devices")
         if num_local_devices < args.gpus:
-          sys.exit(f"{args.gpus} GPUs were requested with --gpus, but nvidia-smi"
-                   f" shows only {num_local_devices} devices")
+            sys.exit(
+                f"{args.gpus} GPUs were requested with --gpus, but nvidia-smi"
+                f" shows only {num_local_devices} devices"
+            )
 else:
     num_local_devices = args.cpus
 
@@ -878,18 +935,21 @@ def split_ici_dcn(agg_parallelism, p):
 
 agg = 1  # aggregate parallelism
 ici_tp, dcn_tp, agg = split_ici_dcn(agg, args.tp)
-ici_pp, dcn_pp, agg = split_ici_dcn(agg, args.pp)
+ici_ep, dcn_ep, agg = split_ici_dcn(agg, args.ep)
 ici_fsdp, dcn_fsdp, agg = split_ici_dcn(agg, args.fsdp)
 ici_dp, dcn_dp, agg = split_ici_dcn(agg, args.dp)
+ici_pp, dcn_pp, agg = split_ici_dcn(agg, args.pp)
 
 argv.append(f"ici_data_parallelism={ici_dp}")
 argv.append(f"ici_fsdp_parallelism={ici_fsdp}")
 argv.append(f"ici_pipeline_parallelism={ici_pp}")
 argv.append(f"ici_tensor_parallelism={ici_tp}")
+argv.append(f"ici_expert_parallelism={ici_ep}")
 argv.append(f"dcn_data_parallelism={dcn_dp}")
 argv.append(f"dcn_fsdp_parallelism={dcn_fsdp}")
 argv.append(f"dcn_pipeline_parallelism={dcn_pp}")
 argv.append(f"dcn_tensor_parallelism={dcn_tp}")
+argv.append(f"dcn_expert_parallelism={dcn_ep}")
 
 # optional maxtext args/overrides
 if args.model_name:
@@ -909,10 +969,9 @@ if args.compile_topology_num_slices:
 
 
 # always enable recomputation
+import multimesh.jax
 with multimesh.jax.context(
     enable_recomputation=True,
-    only_fuse_loop_tasks=args.only_fuse_loop_tasks,
-    enable_task_fusion=args.fuse_tasks,
 ):
     if args.replicate_small_params:
         if args.sequence_length is None:
@@ -924,39 +983,6 @@ with multimesh.jax.context(
             batch_size * args.sequence_length
         )
 
-    if args.hlo is None:
-        import jaxlib
-        import jax
-
-        # sys.argv = argv
-        try:
-            train.main(argv)
-        except jax.lib.xla_extension.XlaRuntimeError as e:
-            need_throw = True
-            if args.dump_only:
-                path = Path(args.dump)
-                if path.exists():
-                    globber = (
-                        path / "*pjit_autoshard_step*before_optimizations.hlo.pb"
-                    )  # noqa: E501
-                    matches = glob.glob(str(globber))
-                    if matches:
-                        print(
-                            "Dump seems to have succeeded in generating "
-                            f"{matches[0]}. Run finished early with error: {e}"
-                        )
-                        need_throw = False
-
-            if need_throw:
-                raise e
-
-    else:
-        platform = "gpu" if args.gpus else "cpu"
-        multimesh.jax.compile_hlo_module(
-            args.hlo,
-            num_partitions=total_devices,
-            erase_sharding=args.erase_explicit_sharding,
-            autoshard=args.autoshard,
-            platform=platform,
-            device_mem_gb=args.fbmem,
-        )
+    import jax
+    import jaxlib
+    train.main(argv)

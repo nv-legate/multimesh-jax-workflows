@@ -1,3 +1,9 @@
+name: Full maxtext
+
+concurrency:
+  group: ${{ startsWith(github.ref_name, 'main') && format('unique-{0}', github.run_id) || format('ci-build-full-maxtext-image-{0}-from-{1}', github.event_name, github.ref_name) }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -12,5 +18,6 @@ jobs:
     with:
       tag: maxtext
       base_image: ghcr.io/nv-legate/multimesh-jax-dev:devcontainer_base
-      stage: reinstall_custom_jax
+      base_component: realm
+      stage: final_image
     secrets: inherit

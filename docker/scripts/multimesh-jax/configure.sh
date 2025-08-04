@@ -4,8 +4,8 @@ set -e
 
 pushd /opt/workspace/multimesh-jax
 
-BUILD_TYPE=$1
-BAZEL_CACHE=$2
+BUILD_TYPE=${1:-Release}
+BAZEL_CACHE=${2:-grpc://host.docker.internal:9092}
 BUILD_TESTS=${3:-OFF}
 BUILD_DIR=/opt/build/multimesh-jax
 LIB_DIR=/opt/lib
@@ -25,6 +25,7 @@ fi
 conda run --no-capture-out -n legere cmake -S . -B ${BUILD_DIR} \
   -DMultiMeshJAX_ENABLE_TESTS=${BUILD_TESTS} \
   -DMultiMeshJAX_RAPIDS_DIR=/opt/rapids-cmake \
+  -DMultiMeshJAX_XLA_LINKER=lld \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCPM_DOWNLOAD_LOCATION=/opt/cpm/cmake/CPM.cmake \
   -DCMAKE_GENERATOR:STRING="Unix Makefiles" \

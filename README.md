@@ -7,19 +7,28 @@ occurring automatically. MultiMesh therefore enables pipeline parallelism to be 
 This repository provides a monorepo and associated workflows for creating a [MaxText](https://github.com/AI-Hypercomputer/maxtext)
 stack running with [MultiMesh](https://github.com/nv-legate/multimesh-jax).
 
-## Prebuilt Containers
+## Prebuilt Images
 
-Prebuilt containers are published to the [MultiMesh Github container registry](https://github.com/nv-legate/multimesh-jax/pkgs/container/multimesh-jax).
+Prebuilt images are published to the [MultiMesh Github container registry](https://github.com/nv-legate/multimesh-jax/pkgs/container/multimesh-jax).
 The most recent release can be pulled:
 
 ```bash
-$ docker pull ghcr.io/nv-legate/multimesh-jax:v0.1.1
+$ docker pull ghcr.io/nv-legate/multimesh-jax:v0.2
 ```
+
+### Requirements
+
+Images are built from a CUDA 12.8
+[base image](https://hub.docker.com/layers/nvidia/cuda/12.8.1-cudnn-devel-ubuntu22.04/images/sha256-61f6c08f2b59036cb935e56d1e31a6b64e3ae2c7ddb86d33fa0b044c7917b719)
+on Ubuntu 22.
+For system compatibility, refer to the
+[CUDA toolkit documentation](https://docs.nvidia.com/cuda/archive/12.8.0/cuda-toolkit-release-notes/index.html#cuda-toolkit-major-component-versions).
+
 
 ## Docker Builds
 
-Instructions for building containers can be found [here](docker/README.md).
-To build the container, numerous submodules need to be downloaded and, in some cases, patched.
+Instructions for building images can be found [here](docker/README.md).
+To build the image, numerous submodules need to be downloaded and, in some cases, patched.
 To do so, run the `./bootstrap.sh` script in the top folder.
 We recommend using the [build driver script](docker/build.py).
 For a full list of options, one can run `build.py --help`.
@@ -51,7 +60,7 @@ Startup scripts will then configure all builds and execute an initial build
 of the environment. The startup scripts point Bazel and CMake to build
 caches on your local system.
 
-* The initial base container download may take a long time on the first download
+* The initial base image download may take a long time on the first download
 * The startup scripts may take a few minutes to up to an hour depending on how
   much of the build is available in the build cache.
 
@@ -112,22 +121,36 @@ docker run \
   --mount type=bind,source=$(pwd)/docker/workspace/maxtext-scripts,target=/workspace \
   -w /workspace \
   --gpus 2 \
-  ghcr.io/nv-legate/multimesh-jax:v0.1.1 \
+  ghcr.io/nv-legate/multimesh-jax:v0.2 \
   ./validate-gpu.sh
 ```
 
 ### MaxText with 8 CPUs
 
 A [script](docker/workspace/maxtext-scripts/validate-cpu.sh) for running a small job with DP=2, PP=2, TP=2 is included.
-Currently the container requires CUDA present even if running a
-CPU-only job. To launch the job:
+To launch the job:
 
 ```bash
 docker run \
   --entrypoint /opt/entrypoint.sh \
   --mount type=bind,source=$(pwd)/docker/workspace/maxtext-scripts,target=/workspace \
   -w /workspace \
-  ghcr.io/nv-legate/multimesh-jax:v0.1.1 \
+  ghcr.io/nv-legate/multimesh-jax:v0.2 \
   ./validate-cpu.sh
 ```
 
+### Slurm scripts
+
+Scripts are included that are intended to be used inside a Slurm job, e.g.
+
+```
+srun -N <N> ... run-dgx-h100.sh
+```
+
+Scripts are included for:
+
+* [Llama3 70B on 64 GPUs](docker/workspace/maxtext-scripts/llama3-70b-64gpus/run-dgx-h100.sh)
+* [Llama3 8B on 16 GPUs](docker/workspace/maxtext-scripts/llama3-8b-16gpus/run-dgx-h100.sh)
+* [GPT3 175B on 64 GPUs](docker/workspace/maxtext-scripts/gpt3-175b-64gpus/run-dgx-h100.sh)
+
+Each folder contains a template Slurm batch script for launching containers.

@@ -10,16 +10,19 @@ for arg in "$@"; do
   esac
 done
 
+pushd /opt/tools
 if [ ! -z $nsys ]; then
-  pushd opt
-  curl -fsSL https://developer.download.nvidia.com/devtools/repos/ubuntu2204/amd64/nvidia.pub | apt-key add -
+  if [ -z "$NSYS_DEB" ]; then
+    echo "Error: NSYS_DEB is empty or not set"
+    exit 1
+  fi
+  cat nvidia.pub | apt-key add -
   echo "deb https://developer.download.nvidia.com/devtools/repos/ubuntu2204/amd64/ /" >> /etc/apt/sources.list.d/nsys.list
 
-  wget https://developer.nvidia.com/downloads/assets/tools/secure/nsight-systems/2024_1/nsight-systems-2024.1.1_2024.1.1.59-1_amd64.deb
   apt-get update
   dpkg --configure -a
   apt-get -y -f install --no-install-recommends
-  apt-get -y install nsight-systems-2024.1.1 --reinstall --no-install-recommends
+  apt-get -y install ./${NSYS_DEB} --reinstall --no-install-recommends
 
   mkdir -p /root/.config/NVIDIA\ Corporation
   echo "CuptiUsePerThreadBuffer=false" > /root/.config/NVIDIA\ Corporation/nsys-config.ini
@@ -28,3 +31,5 @@ fi
 if [ ! -z $jupyter ]; then
   conda run -n legere --no-capture-output python -m pip install notebook --no-cache-dir
 fi
+
+popd

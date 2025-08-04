@@ -1,0 +1,19 @@
+name: Base image
+
+concurrency:
+  group: ${{ startsWith(github.ref_name, 'main') && format('unique-{0}', github.run_id) || format('ci-build-base-image-{0}-from-{1}', github.event_name, github.ref_name) }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - "pull-request/[0-9]+"
+      - "rebase-*"
+
+jobs:
+  build_base_image:
+    uses: ./.github/workflows/base-workflow.yml
+    with:
+      tag: devcontainer_base
+      stage: devcontainer_base
+    secrets: inherit

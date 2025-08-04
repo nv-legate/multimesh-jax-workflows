@@ -1,26 +1,24 @@
 ---
 name: Build docker image
 
-concurrency:
-  group: ${{ startsWith(github.ref_name, 'main') && format('unique-{0}', github.run_id) || format('ci-build-docker-image-{0}-from-{1}', github.event_name, github.ref_name) }}
-  cancel-in-progress: true
-
 on:
   workflow_call:
     inputs:
       stage:
         description: 'The Dockerfile stage to build up to'
         required: true
-        default: 'reinstall_custom_jax'
         type: string
       tag:
         description: 'The docker tag to append to the image: name:tag'
         required: true
-        default: 'maxtext'
         type: string
       base_image:
         description: 'The base stage/image to build maxtext from'
-        default: 'ghcr.io/nv-legate/multimesh-jax-dev:base'
+        default: 'None'
+        type: string
+      base_component:
+        description: 'The base component to start building from'
+        default: 'None'
         type: string
 
 permissions:
@@ -38,9 +36,10 @@ jobs:
     steps:
       - name: Echo input settings
         run: |
-          echo "Base image = ${{ inputs.base_image }}"
-          echo "Stage = ${{ inputs.stage }}"
-          echo "Tag = ${{ inputs.tag }}"
+          echo "Base image     = ${{ inputs.base_image }}"
+          echo "Base component = ${{ inputs.base_component }}"
+          echo "Stage          = ${{ inputs.stage }}"
+          echo "Tag            = ${{ inputs.tag }}"
 
       - name: Check out repository code
         uses: actions/checkout@v4
@@ -55,26 +54,6 @@ jobs:
           if [ -n "$(docker ps -q)" ]; then
             docker stop $(docker ps -q)
           fi
-
-      - name: Setup environment variables
-        run: |
-          cd ..
-          mkdir -p cache
-          cd cache
-          echo "CACHE_DIR=$(pwd)" >> $GITHUB_ENV
-
-      - name: Restore cache
-        id: cache-build
-        uses: actions/cache@v3
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: multimesh-jax-workflows
-
-      - name: Start bazel cache
-        run: |
-          docker run -u 1000:1000 -d -v ${{ env.CACHE_DIR }}:/data \
-            -p 9090:8080 -p 9092:9092 buchgr/bazel-remote-cache \
-            --max_size 30
 
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v3
@@ -92,8 +71,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-
       - name: Generate a development docker image
+        env:
+          JAX_APPLY_PATCHES: ${{ github.repository == 'nv-legate/multimesh-jax-workflows' && '1' || '0' }}
         run: |
           export CONDA_ENV=LJW
 
@@ -111,40 +91,48 @@ jobs:
           ./bootstrap.sh
 
           cd docker
-          ./build.py --no-cache --framework maxtext --base-image ${{ inputs.base_image }} --stage ${{ inputs.stage }}
+          ./build.py --no-cache --base-image ${{ inputs.base_image }} --base-component ${{ inputs.base_component }} --stage ${{ inputs.stage }}
 
       - name: Push image to ghcr.io
         run: |
-          docker tag "${{ inputs.tag }}" "ghcr.io/nv-legate/multimesh-jax-workflows/${{ inputs.tag }}"
-          docker push "ghcr.io/nv-legate/multimesh-jax-workflows/${{ inputs.tag }}"
+          docker tag "multimesh-jax-dev:${{ inputs.stage }}" "ghcr.io/nv-legate/multimesh-jax-workflows.internal/multimesh-jax-dev:${{ inputs.tag }}"
+          docker push "ghcr.io/nv-legate/multimesh-jax-workflows.internal/multimesh-jax-dev:${{ inputs.tag }}"
 
   test:
+    if: inputs.stage == 'final_image'
     needs:
       - build
-    runs-on: linux-amd64-2gpu
+
+    runs-on: linux-amd64-gpu-l4-latest-1
 
     container:
-      options: --cap-add SYS_ADMIN --entrypoint /opt/entrypoint.sh --gpus 0
-      image: ghcr.io/nv-legate/multimesh-jax-workflows/multimesh-jax-dev:maxtext
+      options: --cap-add SYS_ADMIN
+      image: "ghcr.io/nv-legate/multimesh-jax-workflows.internal/multimesh-jax-dev:${{ inputs.tag }}"
       env:
         NVIDIA_VISIBLE_DEVICES: ${{ env.NVIDIA_VISIBLE_DEVICES }}
 
     defaults:
       run:
-        shell: bash -xeuo pipefail {0}
+        shell: bash --noprofile --norc -xeuo pipefail {0}
         working-directory: /opt/workspace/multimesh-jax
 
     steps:
+      - name: Run nvidia-smi to make sure GPU is working
+        run: |
+          echo "NVIDIA_VISIBLE_DEVICES=${{ env.NVIDIA_VISIBLE_DEVICES }}"
+          nvidia-smi
+
       - name: Run Microbatch smoke test
         run: |
-          python tests/python/jax_microbatch_test.py --cpus 1
+          /opt/entrypoint.sh python tests/python/jax_microbatch_test.py --cpus 1
 
       - name: Run Task unit tests
         run: |
           for n in 2 4 8; do
-            python tests/python/jax_auto_task_test.py --cpus $n
+            /opt/entrypoint.sh python tests/python/jax_auto_task_test.py --cpus $n
           done
 
       - name: Run Maxtext validation
         run: |
-          ./validate-cpu.sh
+          cd /opt/maxtext
+          /opt/entrypoint.sh ./validate-cpu.sh

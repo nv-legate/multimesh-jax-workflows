@@ -1,0 +1,52 @@
+name: Lint
+
+concurrency:
+  group: ${{ startsWith(github.ref_name, 'main') && format('unique-{0}', github.run_id) || format('ci-lint-{0}-from-{1}', github.event_name, github.ref_name) }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - "pull-request/[0-9]+"
+      - "branch-*"
+      - "main"
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -xeuo pipefail {0}
+
+jobs:
+    pre-commit:
+      if: ${{ github.repository_owner == 'nv-legate' }}
+      runs-on: 'linux-amd64-cpu4'
+      timeout-minutes: 15
+
+      permissions:
+        contents: read  # This is required for actions/checkout
+
+      steps:
+        - name: Checkout ${{ github.event.repository.name }} (= this repo)
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+
+        - name: Setup Python
+          uses: actions/setup-python@v5
+          with:
+            python-version: '3.13'
+            cache: 'pip'
+
+        - name: Install pre-commit
+          run: pip install pre-commit
+
+        - name: Install hooks
+          run: pre-commit install-hooks
+
+        - name: Run pre-commit only on the pushed diff
+          run: |
+            FROM_REF="${{ github.event.before }}"
+            if [[ "$FROM_REF" == "0000000000000000000000000000000000000000" ]]; then
+                # first commit on a new branch, compare with the shared ancestor of main
+                FROM_REF=$(git merge-base HEAD origin/main)
+            fi
+            pre-commit run --from-ref "$FROM_REF" --to-ref HEAD --show-diff-on-failure

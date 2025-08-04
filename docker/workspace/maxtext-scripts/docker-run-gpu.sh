@@ -3,7 +3,7 @@
 #                         All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-image=${1:-ghcr.io/nv-legate/multimesh-jax:v0.1.1}
+image=${1:-ghcr.io/nv-legate/multimesh-jax:v0.2}
 num_gpus_available=`nvidia-smi --query-gpu=name --format=csv,noheader | wc -l`
 gpus=${2:-$num_gpus_available}
 WORKDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )

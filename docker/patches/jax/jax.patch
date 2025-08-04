@@ -1,8 +1,8 @@
 diff --git a/jax/_src/array.py b/jax/_src/array.py
-index 47bf85661..325b8cc13 100644
+index 422fa5086e..3f26269ac6 100644
 --- a/jax/_src/array.py
 +++ b/jax/_src/array.py
-@@ -104,7 +104,7 @@ class Shard:
+@@ -103,7 +103,7 @@ class Shard:
  
    @functools.cached_property
    def replica_id(self) -> int:
@@ -11,7 +11,7 @@ index 47bf85661..325b8cc13 100644
  
    @property
    def device(self):
-@@ -671,6 +671,7 @@ class ArrayImpl(basearray.Array):
+@@ -622,6 +622,7 @@ class ArrayImpl(basearray.Array):
  
    @profiler.annotate_function
    def copy_to_host_async(self):
@@ -19,16 +19,16 @@ index 47bf85661..325b8cc13 100644
      self._check_if_deleted()
      if self._npy_value is None:
        if self.is_fully_replicated:
-@@ -683,7 +684,7 @@ class ArrayImpl(basearray.Array):
+@@ -634,7 +635,7 @@ class ArrayImpl(basearray.Array):
    @functools.partial(profiler.annotate_function, name="np.asarray(jax.Array)")
    def _value(self) -> np.ndarray:
      self._check_if_deleted()
 -
 +    # This is where arrays get cast to numpy arrays
      if self._npy_value is None:
-       if self.is_fully_replicated:
-         npy_value, did_copy = self._single_device_array_to_np_array_did_copy()
-@@ -1186,7 +1187,6 @@ def shard_device_array(x, devices, indices, sharding):
+       if (self.is_fully_replicated and
+           self.sharding._internal_device_list.addressable_device_list):  # type: ignore
+@@ -1153,7 +1154,6 @@ def shard_device_array(x, devices, indices, sharding):
    aval = core.shaped_abstractify(x)
    return pxla.batched_device_put(aval, sharding, shards, devices)
  
@@ -36,16 +36,80 @@ index 47bf85661..325b8cc13 100644
  def shard_sharded_device_array_slow_path(x, devices, indices, sharding):
    candidates = defaultdict(list)
    bufs = [buf.data for buf in x.addressable_shards]
+@@ -1192,6 +1192,10 @@ def _array_shard_arg(xs, shardings, layouts, copy_semantics):
+   batch_xs, batch_devs, batch_shardings, batch_indices = [], [], [], []
+   batch_cs = []
+ 
++  all_devices = set()
++  for sh in shardings:
++    all_devices = all_devices.union(sh.device_set)
++
+   for i, (x, sharding, layout, cs) in enumerate(
+       safe_zip(xs, shardings, layouts, copy_semantics)):
+     x._check_if_deleted()
+@@ -1199,7 +1203,7 @@ def _array_shard_arg(xs, shardings, layouts, copy_semantics):
+     same_layout = (True if layout is None else
+                    x.layout.device_local_layout == layout)
+ 
+-    if not x.is_fully_addressable:
++    if not x.is_fully_addressable or sharding.num_devices < len(all_devices):
+       if same_indices and same_layout:
+         results.append(x)
+       else:
 diff --git a/jax/_src/custom_partitioning.py b/jax/_src/custom_partitioning.py
-index 9bd2bb6a7..e1ef22a92 100644
+index feb1e0c39c..5459a304b1 100644
 --- a/jax/_src/custom_partitioning.py
 +++ b/jax/_src/custom_partitioning.py
-@@ -532,16 +532,17 @@ def _custom_partitioning_lowering_rule(ctx: mlir.LoweringRuleContext, *values,
+@@ -229,7 +229,8 @@ def _custom_partitioning_abstract_eval(*avals, call, in_tree, out_tree,
+                                        infer_sharding_from_operands,
+                                        decode_shardings,
+                                        sharding_rule,
+-                                       static_args):
++                                       static_args,
++                                       mesh):
+   del in_tree, out_tree, propagate_user_sharding, partition
+   del infer_sharding_from_operands, decode_shardings, sharding_rule
+   del static_args
+@@ -443,13 +444,14 @@ class custom_partitioning:
+ 
+   """
+ 
+-  def __init__(self, fun, static_argnums=()):
++  def __init__(self, fun, mesh=None, static_argnums=()):
+     self.fun = fun
+     self.partition = None
+     self.static_argnums = static_argnums
+     self.propagate_user_sharding = None
+     self.infer_sharding_from_operands = None
+     self.sharding_rule = None
++    self.mesh = mesh
+ 
+   __getattr__: Any = custom_api_util.forward_attr
+ 
+@@ -522,7 +524,8 @@ class custom_partitioning:
+         sharding_rule=sharding_rule,
+         in_tree=in_tree,
+         out_tree=out_tree(),
+-        static_args=static_args
++        static_args=static_args,
++        mesh=mesh
+     )
+     return tree_util.tree_unflatten(out_tree(), out_flat)
+ 
+@@ -533,22 +536,23 @@ def _custom_partitioning_lowering_rule(ctx: mlir.LoweringRuleContext, *values,
+                                        infer_sharding_from_operands,
+                                        decode_shardings,
+                                        sharding_rule,
+-                                       static_args):
++                                       static_args,
++                                       mesh):
+   axis_context = ctx.module_context.axis_context
+   if (isinstance(axis_context, sharding_impls.SPMDAxisContext) and
        set(axis_context.manual_axes) == set(axis_context.mesh.axis_names)):
      return mlir.lower_fun(core.jaxpr_as_fun(call), multiple_results=True)(ctx, *values)
  
-+
-   mesh = mesh_lib.thread_resources.env.physical_mesh
+-  mesh = mesh_lib.thread_resources.env.physical_mesh
++  mesh = mesh or mesh_lib.thread_resources.env.physical_mesh
    if isinstance(axis_context, sharding_impls.ShardingContext):
      devices = axis_context.device_assignment
      if devices is None:
@@ -62,7 +126,7 @@ index 9bd2bb6a7..e1ef22a92 100644
    elif isinstance(axis_context, sharding_impls.SPMDAxisContext):
      devices = axis_context.mesh._flat_devices_tuple
    else:
-@@ -565,6 +566,7 @@ def _custom_partitioning_lowering_rule(ctx: mlir.LoweringRuleContext, *values,
+@@ -572,6 +576,7 @@ def _custom_partitioning_lowering_rule(ctx: mlir.LoweringRuleContext, *values,
    sharding_callback_info = _ShardingCallbackInfo(propagate_user_sharding,
        partition, to_mesh_pspec_sharding, in_tree, out_tree,
        infer_sharding_from_operands, ctx.module_context, mesh, static_args)
@@ -71,10 +135,10 @@ index 9bd2bb6a7..e1ef22a92 100644
    _sharding_callbacks[bytes(key, 'utf8')] = sharding_callback_info
    # We need to make sure `sharding_callback_info` is still alive when the SPMD
 diff --git a/jax/_src/distributed.py b/jax/_src/distributed.py
-index af50e2e9e..8f567d3cf 100644
+index ae1baf8052..66d94d63ad 100644
 --- a/jax/_src/distributed.py
 +++ b/jax/_src/distributed.py
-@@ -50,9 +50,9 @@ class State:
+@@ -51,9 +51,9 @@ class State:
                   cluster_detection_method: str | None = None,
                   initialization_timeout: int = 300,
                   coordinator_bind_address: str | None = None,
@@ -83,10 +147,10 @@ index af50e2e9e..8f567d3cf 100644
                   service_max_missing_heartbeats: int = 10,
 -                 client_heartbeat_interval_seconds: int = 10,
 +                 client_heartbeat_interval_seconds: int = 3000,
-                  client_max_missing_heartbeats: int = 10):
+                  client_max_missing_heartbeats: int = 10,
+                  slice_index: int | None = None):
      coordinator_address = (coordinator_address or
-                            os.environ.get('JAX_COORDINATOR_ADDRESS'))
-@@ -144,6 +144,7 @@ class State:
+@@ -146,6 +146,7 @@ class State:
          coordinator_address, process_id, init_timeout=initialization_timeout,
          heartbeat_interval=client_heartbeat_interval_seconds,
          max_missing_heartbeats=client_max_missing_heartbeats, use_compression=True)
@@ -95,10 +159,10 @@ index af50e2e9e..8f567d3cf 100644
      self.client.connect()
  
 diff --git a/jax/_src/interpreters/mlir.py b/jax/_src/interpreters/mlir.py
-index 1370bb943..bd2e49edf 100644
+index 0256057b8b..d5578f8bee 100644
 --- a/jax/_src/interpreters/mlir.py
 +++ b/jax/_src/interpreters/mlir.py
-@@ -1010,7 +1010,8 @@ class LoweringResult(NamedTuple):
+@@ -1002,7 +1002,8 @@ class LoweringResult(NamedTuple):
    shape_poly_state: ShapePolyLoweringState
  
  
@@ -108,7 +172,7 @@ index 1370bb943..bd2e49edf 100644
  
  
  def add_manual_axes(axis_ctx: sharding_impls.SPMDAxisContext, sharding, ndim):
-@@ -1139,6 +1140,7 @@ def lower_jaxpr_to_module(
+@@ -1187,6 +1188,7 @@ def lower_jaxpr_to_module(
                map(sharded_aval, jaxpr.in_avals, arg_shardings))
    out_avals = (jaxpr.out_avals if result_shardings is None else
                 map(sharded_aval, jaxpr.out_avals, result_shardings))
@@ -116,9 +180,43 @@ index 1370bb943..bd2e49edf 100644
    if all_default_mem_kind:
      arg_memory_kinds = None
      result_memory_kinds = None
-@@ -2676,17 +2678,10 @@ def set_sharding(op, sharding: xc.OpSharding | SdyArraySharding | SdyArrayShardi
+@@ -1889,6 +1891,17 @@ def _emit_lowering_rule_as_fun(lowering_rule,
+     func_dialect.return_(flatten_ir_values(outs))
+   return func_op
+ 
++_name_stack = None
++
++@contextlib.contextmanager
++def jaxpr_name_stack(stack):
++  global _name_stack
++  prev = _name_stack
++  _name_stack = stack
++  try:
++    yield
++  finally:
++    _name_stack = prev
+ 
+ class HashableLiteral:
+   """Hashable wrapper of core.Literal, used for deduplicating IR constants."""
+@@ -2037,10 +2050,11 @@ def jaxpr_subcomp(ctx: ModuleContext, jaxpr: core.Jaxpr,
+         rule_ctx = rule_ctx.replace(axis_size_env=axis_size_env)
+ 
+       assert all(_is_ir_values(v) for v in in_nodes), (eqn, in_nodes)
+-      ans = lower_per_platform(rule_ctx, str(eqn.primitive),
+-                               platform_rules, default_rule,
+-                               eqn.effects,
+-                               *in_nodes, **eqn.params)
++      with jaxpr_name_stack(source_info.name_stack):
++        ans = lower_per_platform(rule_ctx, str(eqn.primitive),
++                                platform_rules, default_rule,
++                                eqn.effects,
++                                *in_nodes, **eqn.params)
+ 
+       if effects:
+         # If there were ordered effects in the primitive, there should be output
+@@ -2740,17 +2754,10 @@ def set_sharding(op, sharding: xc.OpSharding | SdyArray | SdyArrayList):
  def get_sharding_attr(
-     sharding: xc.OpSharding | SdyArraySharding | SdyArrayShardingList
+     sharding: xc.OpSharding | SdyArray | SdyArrayList
  ) -> ir.Attribute:
 -  if config.use_shardy_partitioner.value:
 -    return sharding.build()  # type: ignore
@@ -138,7 +236,7 @@ index 1370bb943..bd2e49edf 100644
  
  def wrap_with_layout_op(ctx: LoweringRuleContext,
                          x: ir.Value,
-@@ -2711,7 +2706,6 @@ def wrap_with_layout_op(ctx: LoweringRuleContext,
+@@ -2775,7 +2782,6 @@ def wrap_with_layout_op(ctx: LoweringRuleContext,
                     result_layouts=[layout.major_to_minor[::-1]])
    return op.result
  
@@ -147,18 +245,10 @@ index 1370bb943..bd2e49edf 100644
  
  def cache_lowering(f):
 diff --git a/jax/_src/interpreters/pxla.py b/jax/_src/interpreters/pxla.py
-index 291d45e34..94bd2b7d1 100644
+index d0a22cd784..66f41dd34f 100644
 --- a/jax/_src/interpreters/pxla.py
 +++ b/jax/_src/interpreters/pxla.py
-@@ -71,6 +71,7 @@ from jax._src.sharding_impls import (
-     SingleDeviceSharding, GSPMDSharding, NamedSharding, PositionalSharding)
- from jax._src.util import (safe_map, safe_zip, partition_list, wrap_name,
-                            tuple_update, tuple_delete, distributed_debug_log,
-+
-                            unzip2, HashableFunction, weakref_lru_cache)
- from jax._src.state.types import AbstractRef, RefEffect
- 
-@@ -215,6 +216,8 @@ def _shard_np_array(xs, shardings, layouts, copy_semantics):
+@@ -217,6 +217,8 @@ def _shard_np_array(xs, shardings, layouts, copy_semantics):
          shards = [x[i] for i in indices]
        results.append(batched_device_put(aval, sharding, shards, devices))
    return results
@@ -167,32 +257,55 @@ index 291d45e34..94bd2b7d1 100644
  for _t in array_types:
    shard_arg_handlers[_t] = _shard_np_array
  
-@@ -1728,7 +1731,7 @@ def _get_and_check_device_assignment(
- ) -> tuple[xc.Client, tuple[xc.Device, ...]]:
+@@ -1681,33 +1683,57 @@ def _get_and_check_device_assignment(
    first_sharding_info = None
    devices = () if devices is None else tuple(devices)
--
+ 
++  # without creating explicit list, multiple iterations over shardings 
++  # leads to error
++  shardings = list(shardings)
++
++  # NamedShardings over submeshes (e.g. produced by shard_map) clobber
++  # device assignments, so ignore them
++  all_devices = set()
++  for sh, s_type, source_info in shardings:
++    if isinstance(sh, UnspecifiedValue):
++      continue
++    if isinstance(sh, NamedSharding) and isinstance(sh.mesh, AbstractMesh):
++      continue
++    arr_device_assignment = (sh.mesh._flat_devices_tuple if isinstance(sh, AUTO)
++                             else sh._device_assignment)
++    for dev in arr_device_assignment:
++      all_devices.add(dev)
++  num_total_devices = len(all_devices)
++
 +  all_device_assignment = {}
    for sh, s_type, source_info in shardings:
      if isinstance(sh, UnspecifiedValue):
        continue
-@@ -1740,22 +1743,25 @@ def _get_and_check_device_assignment(
+     if isinstance(sh, NamedSharding) and isinstance(sh.mesh, AbstractMesh):
+       continue
++    if isinstance(sh, NamedSharding) and len(sh._device_assignment) != num_total_devices:
++      continue
+     if first_sharding_info is None:
+       first_sharding_info = (
+           (sh.mesh._flat_devices_tuple, s_type, source_info) if isinstance(sh, AUTO)
             else (sh._device_assignment, s_type, source_info))
      arr_device_assignment = (sh.mesh._flat_devices_tuple if isinstance(sh, AUTO)
                               else sh._device_assignment)
 -    if not devices:
 -      if first_sharding_info[0] != arr_device_assignment:
--        raise DeviceAssignmentMismatchError([
--            DeviceAssignmentMismatch(*first_sharding_info),
--            DeviceAssignmentMismatch(arr_device_assignment, s_type, source_info)])
+-        raise stages.DeviceAssignmentMismatchError([
+-            stages.DeviceAssignmentMismatch(*first_sharding_info),
+-            stages.DeviceAssignmentMismatch(arr_device_assignment, s_type, source_info)])
 +
 +    if isinstance(sh, GSPMDSharding):
 +      offset = sh._hlo_sharding.tile_assignment_devices()[0]
      else:
 -      if devices != arr_device_assignment:
--        raise DeviceAssignmentMismatchError([
--            DeviceAssignmentMismatch(devices, MismatchType.CONTEXT_DEVICES, None),
--            DeviceAssignmentMismatch(arr_device_assignment, s_type, source_info)])
+-        raise stages.DeviceAssignmentMismatchError([
+-            stages.DeviceAssignmentMismatch(devices, stages.MismatchType.CONTEXT_DEVICES, None),
+-            stages.DeviceAssignmentMismatch(arr_device_assignment, s_type, source_info)])
 -  if first_sharding_info is None and devices:
 +      offset = 0
 +
@@ -215,7 +328,26 @@ index 291d45e34..94bd2b7d1 100644
    return xb.get_device_backend(final_device_assignment[0]), final_device_assignment
  
  MaybeSharding = Union[JSharding, UnspecifiedValue]
-@@ -2506,7 +2512,13 @@ def get_out_shardings_from_executable(
+@@ -2298,18 +2324,6 @@ def lower_sharding_computation(
+   # 2. Build up the HLO
+ 
+   abstract_mesh = None
+-  if prim_requires_devices:
+-    assert da_object is not None
+-    for sharding in it.chain(unique_in_shardings, unique_out_shardings,
+-                             unique_intermediate_shardings):
+-      if isinstance(sharding, NamedSharding):
+-        if (abstract_mesh is not None and
+-            abstract_mesh != sharding.mesh.abstract_mesh):
+-          raise ValueError(
+-              "mesh should be the same across the entire program. Got mesh"
+-              f" shape for one sharding {abstract_mesh} and"
+-              f" {sharding.mesh.abstract_mesh} for another")
+-        abstract_mesh = sharding.mesh.abstract_mesh
+ 
+   semantic_in_shardings = SemanticallyEqualShardings(
+       in_shardings, global_in_avals)
+@@ -2496,7 +2510,13 @@ def get_out_shardings_from_executable(
    assert len(out_op_shardings) == num_out_avals == len(omk), (
        len(out_op_shardings), num_out_avals, len(omk))
  
@@ -230,7 +362,7 @@ index 291d45e34..94bd2b7d1 100644
            for os, mk in safe_zip(out_op_shardings, omk)]
  
  
-@@ -2532,8 +2544,14 @@ def _get_in_shardings_from_xla(
+@@ -2520,8 +2540,14 @@ def _get_in_shardings_from_xla(
    assert len(in_op_shardings) == num_in_avals, (
        len(in_op_shardings), num_in_avals)
  
@@ -247,7 +379,7 @@ index 291d45e34..94bd2b7d1 100644
  
  
  # TODO(yashkatariya): Remove this function after `AUTO` can return shardings
-@@ -2972,12 +2990,45 @@ class UnloadedMeshExecutable:
+@@ -2956,12 +2982,45 @@ class UnloadedMeshExecutable:
  
      if auto_spmd_lowering:
        assert mesh is not None
@@ -299,7 +431,7 @@ index 291d45e34..94bd2b7d1 100644
      else:
        if pmap_nreps == 1:
          assert mesh is None
-@@ -3004,9 +3055,9 @@ class UnloadedMeshExecutable:
+@@ -2988,9 +3047,9 @@ class UnloadedMeshExecutable:
          for l, s, a, in safe_zip(xla_in_layouts, in_shardings, global_in_avals)
      ]
  
@@ -313,7 +445,7 @@ index 291d45e34..94bd2b7d1 100644
      in_shardings = finalize_shardings(in_shardings, da)
      out_shardings = finalize_shardings(out_shardings, da)
 diff --git a/jax/_src/op_shardings.py b/jax/_src/op_shardings.py
-index 6b248736c..c578e40c1 100644
+index ed53b52a2c..b640e270ad 100644
 --- a/jax/_src/op_shardings.py
 +++ b/jax/_src/op_shardings.py
 @@ -59,6 +59,10 @@ def are_op_shardings_equal(op1: xc.OpSharding | xc.HloSharding,
@@ -341,27 +473,65 @@ index 6b248736c..c578e40c1 100644
  
  
 diff --git a/jax/_src/pjit.py b/jax/_src/pjit.py
-index 9bc83a5a3..a1863daf6 100644
+index d5286be8e0..c1d9fa76e0 100644
 --- a/jax/_src/pjit.py
 +++ b/jax/_src/pjit.py
-@@ -65,6 +65,8 @@ from jax._src.lib import jax_jit
+@@ -64,6 +64,7 @@ from jax._src.lib import jax_jit
  from jax._src.lib import xla_client as xc
  from jax._src.mesh import AbstractMesh
  from jax._src.sharding import Sharding
-+from jax._src.lib import xla_extension as xe
 +
  from jax._src.sharding_impls import (
      NamedSharding, GSPMDSharding,
      SingleDeviceSharding, PmapSharding, AUTO, UNSPECIFIED, UnspecifiedValue,
-@@ -136,7 +138,6 @@ def _device_assignment_mismatch_error(fun_name, fails, args_flat, api_name,
-   msg = (f"Received incompatible devices for {api_name}ted computation.{extra_msg}")
-   return msg
+@@ -95,6 +96,46 @@ MeshShardingMinusUnspecified = Union[NamedSharding, AUTO]
  
--
+ logger = logging.getLogger(__name__)
+ 
++def _find_arg_mismatch(arg_list, fails, fun_name):
++  mismatched_args_msg = []
++  def mismatch(err):
++    for name, inp_da, aval in arg_list:
++      if err.m_type == pxla.MismatchType.ARG_SHARDING and err.da == inp_da:
++        mismatched_args_msg.append(
++            f"argument {name} of {fun_name} with shape {aval.str_short()} and "
++            f"{err._dev_ids_plat_str}")
++        break
++  first_err, second_err = fails
++  mismatch(first_err)
++  mismatch(second_err)
++  return mismatched_args_msg
++
++def _device_assignment_mismatch_error(fun_name, fails, args_flat, api_name,
++                                      arg_names):
++  arg_list = []
++  if arg_names is None:
++    arg_names = [''] * len(args_flat)
++  for a, n in zip(args_flat, arg_names):
++    da = (a.sharding._device_assignment
++          if getattr(a, 'sharding', None) is not None else None)
++    arg_list.append((n, da, core.shaped_abstractify(a)))
++
++  mismatched_args_msg = _find_arg_mismatch(arg_list, fails, fun_name)
++
++  if len(mismatched_args_msg) == 2:
++    first, second = mismatched_args_msg  # pytype: disable=bad-unpacking
++    extra_msg = f" Got {first} and {second}"
++  elif len(mismatched_args_msg) == 1:
++    first, second  = fails
++    # Choose the failure left which is not already covered by ARG_SHARDING.
++    left = second if first.m_type == pxla.MismatchType.ARG_SHARDING else first
++    extra_msg = f" Got {mismatched_args_msg[0]} and{left._str(api_name)}"
++  else:
++    first, second = fails
++    extra_msg = f" Got{first._str(api_name)} and{second._str(api_name)}"
++  msg = (f"Received incompatible devices for {api_name}ted computation.{extra_msg}")
++  return msg
++
+ 
  class PjitInfo(NamedTuple):
    """Things that we know about a jit instance before it is called.
- 
-@@ -2894,6 +2895,43 @@ def use_explicit_axes(*axes):
+@@ -3177,6 +3218,43 @@ batching.skippable_batchers[layout_constraint_p] = lambda _: ()
  
  # -------------------- helpers --------------------
  
@@ -386,7 +556,7 @@ index 9bc83a5a3..a1863daf6 100644
 +    else:
 +      # non-iota submesh of devices
 +      proto_sharding = xc.OpSharding()
-+      proto_sharding.type = xe.OpSharding_Type.OTHER
++      proto_sharding.type = xc.OpSharding.Type.OTHER
 +      proto_sharding.tile_assignment_dimensions = iota_proto.tile_assignment_dimensions
 +      proto_sharding.tile_assignment_devices = devices
 +      if iota_proto.last_tile_dims:
@@ -403,32 +573,32 @@ index 9bc83a5a3..a1863daf6 100644
 +
 +
  def get_unconstrained_dims(sharding: NamedSharding):
-   assert sharding._parsed_pspec is not None
-   return {i for i, axes in enumerate(sharding._parsed_pspec)
+   assert sharding.spec is not None
+   return {i for i, axes in enumerate(sharding.spec)
 diff --git a/jax/_src/prng.py b/jax/_src/prng.py
-index e40e2f6ac..ab29d4a86 100644
+index 51211e62af..413f525de8 100644
 --- a/jax/_src/prng.py
 +++ b/jax/_src/prng.py
-@@ -937,10 +937,10 @@ mlir.register_lowering(
+@@ -958,10 +958,10 @@ mlir.register_lowering(
      threefry2x32_p, _threefry2x32_lowering_rule)
  mlir.register_lowering(
      threefry2x32_p, _threefry2x32_cpu_lowering_rule, platform='cpu')
 -mlir.register_lowering(
 -    threefry2x32_p,
--    partial(_threefry2x32_gpu_lowering_rule, gpu_prng.cuda_threefry2x32),
+-    partial(_threefry2x32_gpu_lowering_rule, target_name_prefix='cu'),
 -    platform='cuda')
 +#mlir.register_lowering(
 +#    threefry2x32_p,
 +#    partial(_threefry2x32_gpu_lowering_rule, gpu_prng.cuda_threefry2x32),
-+#    platform='cuda')
++#    platform='cu')
  mlir.register_lowering(
      threefry2x32_p,
-     partial(_threefry2x32_gpu_lowering_rule, gpu_prng.rocm_threefry2x32),
+     partial(_threefry2x32_gpu_lowering_rule, target_name_prefix='hip'),
 diff --git a/jax/_src/sharding.py b/jax/_src/sharding.py
-index a9bf62b46..2092af676 100644
+index f4b342deaf..58662375b4 100644
 --- a/jax/_src/sharding.py
 +++ b/jax/_src/sharding.py
-@@ -47,10 +47,14 @@ def common_devices_indices_map(
+@@ -44,10 +44,14 @@ def common_devices_indices_map(
      s: Sharding, global_shape: Shape) -> Mapping[Device, Index]:
    s.shard_shape(global_shape)  # raises a good error message
    hlo_sharding = s._to_xla_hlo_sharding(len(global_shape))
@@ -447,10 +617,10 @@ index a9bf62b46..2092af676 100644
  @cache(max_size=4096, trace_context_in_key=False)
  def _common_shard_shape(self, global_shape: Shape) -> Shape:
 diff --git a/jax/_src/sharding_impls.py b/jax/_src/sharding_impls.py
-index a73f26f3c..b361b26f9 100644
+index 4703e64030..60fc455933 100644
 --- a/jax/_src/sharding_impls.py
 +++ b/jax/_src/sharding_impls.py
-@@ -385,7 +385,9 @@ def _op_sharding_to_pos_sharding(
+@@ -371,7 +371,9 @@ def _op_sharding_to_pos_sharding(
    ids = np.array(
        [DeviceIdSet(name, i) for i in op_sharding.tile_assignment_devices()]
    )
@@ -461,20 +631,30 @@ index a73f26f3c..b361b26f9 100644
                                   memory_kind=memory_kind)
    p = p.reshape(op_sharding.tile_assignment_dimensions())
    if op_sharding.replicate_on_last_tile_dim():
-@@ -1233,6 +1235,8 @@ def create_mesh_pspec_sharding(
-
+@@ -1260,6 +1262,8 @@ def create_mesh_pspec_sharding(
  def _gspmd_to_named_sharding_via_mesh(
-     out_s: GSPMDSharding, mesh: mesh_lib.Mesh) -> NamedSharding:
+     out_s: GSPMDSharding, mesh: mesh_lib.Mesh | mesh_lib.AbstractMesh
+ ) -> NamedSharding:
 +  if len(out_s._hlo_sharding.tile_assignment_devices()) != mesh.ndevices:
 +    return out_s
-   parsed_pspec = parse_flatten_op_sharding(
-       out_s._hlo_sharding, mesh)[0]
+   spec = parse_flatten_op_sharding(out_s._hlo_sharding, mesh)[0]
    return create_mesh_pspec_sharding(
+       mesh, spec, memory_kind=out_s.memory_kind)
+@@ -1428,9 +1432,6 @@ def use_concrete_mesh(mesh: mesh_lib.Mesh | None):
+ 
+ @contextlib.contextmanager
+ def _internal_use_concrete_mesh(mesh: mesh_lib.Mesh | None):
+-  if mesh is not None and not isinstance(mesh, mesh_lib.Mesh):
+-    raise ValueError(
+-        f"Expected mesh of type `jax.sharding.Mesh`. Got {type(mesh)}")
+   prev_val = config.device_context.swap_local(mesh)
+   try:
+     yield
 diff --git a/jax/_src/test_util.py b/jax/_src/test_util.py
-index 9f2bab2b4..0983e7f78 100644
+index f6810b533b..f34484c614 100644
 --- a/jax/_src/test_util.py
 +++ b/jax/_src/test_util.py
-@@ -1290,7 +1290,7 @@ class JaxTestCase(parameterized.TestCase):
+@@ -1148,7 +1148,7 @@ class JaxTestCase(parameterized.TestCase):
    _default_thread_local_config = {
      'jax_enable_checks': True,
      'jax_numpy_dtype_promotion': 'strict',
@@ -484,10 +664,10 @@ index 9f2bab2b4..0983e7f78 100644
      'jax_legacy_prng_key': 'error',
    }
 diff --git a/jax/_src/xla_bridge.py b/jax/_src/xla_bridge.py
-index 33b46145d..58da43d80 100644
+index ce0c36fdcc..84ac24ddcb 100644
 --- a/jax/_src/xla_bridge.py
 +++ b/jax/_src/xla_bridge.py
-@@ -586,6 +586,10 @@ def discover_pjrt_plugins() -> None:
+@@ -404,6 +404,10 @@ def discover_pjrt_plugins() -> None:
    from heavy-weight system initialization.
    """
    plugin_modules = set()
@@ -498,7 +678,7 @@ index 33b46145d..58da43d80 100644
    # Scan installed modules under |jax_plugins|. Note that not all packaging
    # scenarios are amenable to such scanning, so we also use the entry-point
    # method to seed the list.
-@@ -594,7 +598,8 @@ def discover_pjrt_plugins() -> None:
+@@ -412,7 +416,8 @@ def discover_pjrt_plugins() -> None:
          jax_plugins.__path__, jax_plugins.__name__ + '.'
      ):
        logger.debug("Discovered path based JAX plugin: %s", name)
@@ -508,7 +688,7 @@ index 33b46145d..58da43d80 100644
    else:
      logger.debug("No jax_plugins namespace packages available")
  
-@@ -604,7 +609,8 @@ def discover_pjrt_plugins() -> None:
+@@ -422,7 +427,8 @@ def discover_pjrt_plugins() -> None:
    for entry_point in entry_points(group="jax_plugins"):
      logger.debug("Discovered entry-point based JAX plugin: %s",
                   entry_point.value)
@@ -518,7 +698,7 @@ index 33b46145d..58da43d80 100644
  
    # Now load and initialize them all.
    for plugin_module_name in plugin_modules:
-@@ -794,7 +800,7 @@ _platform_aliases = {
+@@ -618,7 +624,7 @@ _platform_aliases = {
  _alias_to_platforms: dict[str, list[str]] = {}
  for _platform, _alias in _platform_aliases.items():
    _alias_to_platforms.setdefault(_alias, []).append(_platform)
@@ -527,11 +707,20 @@ index 33b46145d..58da43d80 100644
  
  def known_platforms() -> set[str]:
    platforms = set()
+@@ -735,6 +741,8 @@ def backends() -> dict[str, xla_client.Client]:
+       try:
+         if platform == "cuda" and not hardware_utils.has_visible_nvidia_gpu():
+           continue
++        if platform in _backends:
++          continue
+ 
+         backend = _init_backend(platform)
+         _backends[platform] = backend
 diff --git a/jax/experimental/multihost_utils.py b/jax/experimental/multihost_utils.py
-index 2bde1fbea..925bdff25 100644
+index 7be349f0fc..1fdcb18005 100644
 --- a/jax/experimental/multihost_utils.py
 +++ b/jax/experimental/multihost_utils.py
-@@ -157,11 +157,11 @@ def process_allgather(in_tree: Any, tiled: bool = False) -> Any:
+@@ -160,11 +160,11 @@ def process_allgather(in_tree: Any, tiled: bool = False) -> Any:
  
  def assert_equal(in_tree, fail_message: str = ''):
    """Verifies that all the hosts have the same tree of values."""
@@ -548,20 +737,138 @@ index 2bde1fbea..925bdff25 100644
  
  
  def reached_preemption_sync_point(step_id: int) -> bool:
+diff --git a/jaxlib/py_array.cc b/jaxlib/py_array.cc
+index 37932a2aed..4746715af4 100644
+--- a/jaxlib/py_array.cc
++++ b/jaxlib/py_array.cc
+@@ -79,6 +79,7 @@ limitations under the License.
+ #include "xla/primitive_util.h"
+ #include "xla/python/ifrt/array.h"
+ #include "xla/python/ifrt/array_spec.h"
++#include "xla/python/ifrt/basic_device_list.h"
+ #include "xla/python/ifrt/device.h"
+ #include "xla/python/ifrt/device_list.h"
+ #include "xla/python/ifrt/dtype.h"
+@@ -502,7 +503,7 @@ void PyInit_helper(PyArray self, nb::object aval, nb::object sharding,
+ void PyArray::PyInit(PyArray self, nb::object aval, nb::object sharding,
+                      absl::Span<const PyArray> py_arrays, bool committed,
+                      bool skip_checks) {
+-  if (skip_checks) {
++  if (true || skip_checks) {
+     PyInit_helper(self, aval, sharding, py_arrays, committed);
+   } else {
+     nb::object rearranged_arrays =
+@@ -682,6 +683,7 @@ nb::object PyArray::arrays() {
+ }
+ 
+ absl::Status PyArray::set_arrays(nb::object obj) {
++  return Unimplemented("PyArray::set_arrays");
+   if (obj.is_none()) {
+     SetIfrtArray(ifrt::ArrayRef());
+     py_arrays().clear();
+@@ -850,9 +852,6 @@ absl::StatusOr<PyArray> PyArray::AssertUnsharded(absl::string_view api) {
+   }
+ 
+   auto& py_arrays = py_arrays_cached();
+-  if (py_arrays.size() != 1) {
+-    return InvalidArgument("%s() is supported only for unsharded arrays.", api);
+-  }
+   return py_arrays[0];
+ }
+ 
+@@ -1139,8 +1138,8 @@ absl::StatusOr<std::vector<PyArray>> PyArray::BatchedCopyToDeviceWithSharding(
+     return std::vector<PyArray>();
+   }
+ 
+-  TF_RET_CHECK(py_arrays.size() == dst_device_lists.size());
+-  TF_RET_CHECK(py_arrays.size() == dst_shardings.size());
++  // TF_RET_CHECK(py_arrays.size() == dst_device_lists.size());
++  // TF_RET_CHECK(py_arrays.size() == dst_shardings.size());
+ 
+   ifrt::Client* const client = py_arrays.front().ifrt_array()->client();
+   std::vector<PyArray> results(py_arrays.size());
+diff --git a/jaxlib/py_executable.cc b/jaxlib/py_executable.cc
+index a9a7ebea2d..5b58fa7913 100644
+--- a/jaxlib/py_executable.cc
++++ b/jaxlib/py_executable.cc
+@@ -211,6 +211,7 @@ absl::StatusOr<PyExecuteResults> ExecuteShardedOnLocalDevicesInternal(
+   PjRtFuture<> result_status;
+   {
+     nb::gil_scoped_release gil_release;
++#if 0
+     for (const auto& arg : args) {
+       if (GetNumDevices(arg) != num_computations) {
+         return InvalidArgument(
+@@ -223,7 +224,9 @@ absl::StatusOr<PyExecuteResults> ExecuteShardedOnLocalDevicesInternal(
+                           }));
+       }
+     }
++#endif
+     std::vector<ifrt::ArrayRef> arg_arrays(args.size());
++
+     absl::c_transform(args, arg_arrays.begin(),
+                       [&](const ExecuteShardedArg& arg) mutable {
+                         return GetIfRtArray(arg);
+diff --git a/jaxlib/xla_compiler.cc b/jaxlib/xla_compiler.cc
+index f9ec134793..19d1c884dd 100644
+--- a/jaxlib/xla_compiler.cc
++++ b/jaxlib/xla_compiler.cc
+@@ -1332,6 +1332,32 @@ void BuildXlaCompilerSubmodule(nb::module_& m) {
+              nb::bytes serialized = nb::cast<nb::bytes>(t[0]);
+              self->ParseFromArray(serialized.c_str(), serialized.size());
+            })
++      .def("num_devices", [](OpSharding* self){
++        int64_t size = 1;
++        for (auto&& dim : self->tile_assignment_dimensions()){
++          size *= dim;
++        }
++        return size;
++      })
++      .def("device_assignment", [](OpSharding* self, nb::tuple device_assignment){
++        std::vector<nb::object> devices;
++        devices.reserve(device_assignment.size());
++        if (!self->tile_assignment_devices().empty()){
++          for (int64_t dev : self->tile_assignment_devices()){
++            devices.push_back(device_assignment[dev]);
++          }
++          return devices;
++        }
++
++        int64_t size = 1;
++        for (auto&& dim : self->tile_assignment_dimensions()){
++          size *= dim;
++        }
++        for (int64_t dev=self->iota_offset(); dev < self->iota_offset() + size; ++dev){
++          devices.push_back(device_assignment[dev]);
++        }
++        return devices;
++      })
+       .def_prop_rw("type", &xla::OpSharding::type, &xla::OpSharding::set_type)
+       .def_prop_rw("replicate_on_last_tile_dim",
+                    &xla::OpSharding::replicate_on_last_tile_dim,
+@@ -1342,6 +1368,8 @@ void BuildXlaCompilerSubmodule(nb::module_& m) {
+                    &xla::OpSharding::set_shard_group_id)
+       .def_prop_rw("shard_group_type", &xla::OpSharding::shard_group_type,
+                    &xla::OpSharding::set_shard_group_type)
++      .def_prop_rw("iota_offset", &xla::OpSharding::iota_offset,
++                   &xla::OpSharding::set_iota_offset)
+       .def("__repr__",
+            [](const xla::OpSharding& self) { return self.DebugString(); })
+       .def("ParseFromString",
 diff --git a/tests/lax_control_flow_test.py b/tests/lax_control_flow_test.py
-index 175b96a9c..9500a41d1 100644
+index 54dff47fea..570567a707 100644
 --- a/tests/lax_control_flow_test.py
 +++ b/tests/lax_control_flow_test.py
-@@ -2001,6 +2001,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
+@@ -2079,6 +2079,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
        {"testcase_name": f"_{scan_name}",
         "scan": scan_impl}
        for scan_impl, scan_name in SCAN_IMPLS_WITH_FOR)
-+  @jtu.skip_on_devices("multimesh") # creates host buffers that don't play nice with multimesh
++  @jtu.skip_on_devices("multimesh") # this creats host buffers that don't play nice with multimesh client
    def testScanHigherOrderDifferentiation(self, scan):
      d = 0.75
      def f(c, a):
 diff --git a/tests/lax_numpy_einsum_test.py b/tests/lax_numpy_einsum_test.py
-index ea7bff1d0..3c58374b4 100644
+index ea7bff1d09..b47e820dfd 100644
 --- a/tests/lax_numpy_einsum_test.py
 +++ b/tests/lax_numpy_einsum_test.py
 @@ -254,6 +254,12 @@ class EinsumTest(jtu.JaxTestCase):
@@ -572,13 +879,13 @@ index ea7bff1d0..3c58374b4 100644
 +      components = einstr.replace("->", ",").split(",")
 +      max_dim = max([len(comp) for comp in components])
 +      if max_dim > 5:
-+        self.skipTest("too many dimensions for MultiMesh")
++        self.skipTest("too many dimensions for Legate")
 +
      r = jtu.rand_default(self.rng())
      if '->' in einstr:
        input_str, result_names = einstr.split('->')
 diff --git a/tests/lax_numpy_test.py b/tests/lax_numpy_test.py
-index 45698d3b1..3751dbc90 100644
+index 29e6586ffa..90fa237db3 100644
 --- a/tests/lax_numpy_test.py
 +++ b/tests/lax_numpy_test.py
 @@ -739,6 +739,12 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
@@ -589,29 +896,29 @@ index 45698d3b1..3751dbc90 100644
 +      num_axes = axes if isinstance(axes, int) else len(axes[0])
 +      target_shape = len(lhs_shape) + len(rhs_shape) - num_axes
 +      if target_shape > 5:
-+        self.skipTest("MultiMesh backend does not support 6-D or higher tensors")
++        self.skipTest("Legate backend does not support 6-D or higher tensors")
 +
      rng = jtu.rand_default(self.rng())
      args_maker = lambda: [rng(lhs_shape, lhs_dtype), rng(rhs_shape, rhs_dtype)]
      jnp_fun = lambda a, b: jnp.tensordot(a, b, axes)
-@@ -975,6 +981,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
+@@ -976,6 +982,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
      cov=[False, True, "unscaled"],
    )
    @jax.default_matmul_precision("float32")
 +  @jtu.skip_on_devices("multimesh") # the custom calls do not register correctly on plugins
-   def testPolyfit(self, shape, dtype, deg, rcond, full, w, cov):
+   def testPolyfit(self, shape, num_rhs, dtype, deg, rcond, full, w, cov):
      rng = jtu.rand_default(self.rng())
      tol_spec = {np.float32: 1e-3, np.float64: 1e-13, np.complex64: 1e-5}
-@@ -1413,6 +1420,8 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
+@@ -1424,6 +1431,8 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
      reps=[(), (2,), (3, 4), (2, 3, 4), (1, 0, 2)],
    )
    def testTile(self, shape, dtype, reps):
 +    if jtu.device_under_test() == "multimesh" and 2 * max(len(reps), len(shape)) > 5:
-+      self.skipTest("too many dims for MultiMesh")
++      self.skipTest("too many dims for Legate")
      rng = jtu.rand_default(self.rng())
      np_fun = lambda arg: np.tile(arg, reps)
      jnp_fun = lambda arg: jnp.tile(arg, reps)
-@@ -1961,6 +1970,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
+@@ -1972,6 +1981,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
      ],
      dtype=all_dtypes,
    )
@@ -619,7 +926,7 @@ index 45698d3b1..3751dbc90 100644
    def testInsertSlice(self, shape, dtype, axis):
      x = jnp.empty(shape)
      max_ind = x.size if axis is None else x.shape[axis]
-@@ -2044,6 +2054,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
+@@ -2055,6 +2065,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
      repeats=[0, 1, 2],
      fixed_size=[False, True],
    )
@@ -627,7 +934,7 @@ index 45698d3b1..3751dbc90 100644
    def testRepeat(self, axis, shape, dtype, repeats, fixed_size):
      rng = jtu.rand_default(self.rng())
      np_fun = lambda arg: np.repeat(arg, repeats=repeats, axis=axis)
-@@ -2221,6 +2232,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
+@@ -2232,6 +2243,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
      self._CheckAgainstNumpy(np_fun, jnp_fun, args_maker)
  
    @jtu.sample_product(fixed_size=[False, True])
@@ -635,7 +942,7 @@ index 45698d3b1..3751dbc90 100644
    def testNonScalarRepeats(self, fixed_size):
      '''
      Following numpy test suite from `test_repeat` at
-@@ -2317,7 +2329,8 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
+@@ -2328,7 +2340,8 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
      xshape=one_dim_array_shapes,
      yshape=one_dim_array_shapes,
    )
@@ -645,18 +952,18 @@ index 45698d3b1..3751dbc90 100644
    def testConvolutionsPreferredElementType(self, xshape, yshape, dtype, mode, op):
      jnp_op = getattr(jnp, op)
      np_op = getattr(np, op)
-@@ -2513,6 +2526,10 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
+@@ -2524,6 +2537,10 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
    def testFillDiagonal(self, dtype, a_shape, val_shape):
      rng = jtu.rand_default(self.rng())
  
 +    dummy = jnp.zeros((4,), dtype=dtype)
 +    if dummy.dtype.itemsize <= 2 and jtu.device_under_test() == "multimesh":
-+      self.skipTest("multimesh currently has bug for padding fill diagonal array for 8- and 16-bit types")
++      self.skipTest("legate currently has bug for padding fill diagonal array for 8- and 16-bit types")
 +
      def np_fun(a, val):
        a_copy = a.copy()
        np.fill_diagonal(a_copy, val)
-@@ -3707,6 +3724,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
+@@ -3782,6 +3799,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
      dtype=all_dtypes,
      func=["array", "copy", "copy.copy", "copy.deepcopy"],
    )
@@ -664,7 +971,7 @@ index 45698d3b1..3751dbc90 100644
    def testArrayCopy(self, dtype, func):
      x = jnp.ones(10, dtype=dtype)
      if func == "copy.deepcopy":
-@@ -3903,6 +3921,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
+@@ -3979,6 +3997,7 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
      self._CheckAgainstNumpy(np_fun, jnp_fun, args_maker)
      self._CompileAndCheck(jnp_fun, args_maker)
  
@@ -672,7 +979,7 @@ index 45698d3b1..3751dbc90 100644
    def testZeroStridesConstantHandler(self):
      raw_const = self.rng().randn(1, 2, 1, 1, 5, 1)
      const = np.broadcast_to(raw_const, (3, 2, 3, 4, 5, 6))
-@@ -5056,8 +5075,8 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
+@@ -5132,8 +5151,8 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
                          np_arange(77, dtype=float))
      self.assertAllClose(jnp.arange(2, 13, dtype=int),
                          np_arange(2, 13, dtype=int))
@@ -684,7 +991,7 @@ index 45698d3b1..3751dbc90 100644
      self.assertRaises(TypeError, lambda: jnp.arange())
  
 diff --git a/tests/pjit_test.py b/tests/pjit_test.py
-index bfb9451bd..1a349674f 100644
+index d37b21bd24..d2961905e3 100644
 --- a/tests/pjit_test.py
 +++ b/tests/pjit_test.py
 @@ -71,17 +71,23 @@ jtu.request_cpu_devices(8)
@@ -735,7 +1042,7 @@ index bfb9451bd..1a349674f 100644
    @jtu.with_mesh([('x', 2), ('y', 1)])
    def testAutodiffCache(self):
      f = pjit(lambda x: jnp.sin(x).sum(), in_shardings=P('x'), out_shardings=None)
-@@ -1175,6 +1185,7 @@ class PJitTest(jtu.BufferDonationTestCase):
+@@ -1190,6 +1200,7 @@ class PJitTest(jtu.BufferDonationTestCase):
      self.assertIsInstance(exe, stages.Compiled)
      self.assertArraysEqual(exe(x, x), x @ x)
  
@@ -743,7 +1050,7 @@ index bfb9451bd..1a349674f 100644
    def test_local_sharded_key_array_sda(self):
      input_shape = (8, 4)
      mesh = jtu.create_mesh((4, 2), ('x', 'y'))
-@@ -1193,6 +1204,7 @@ class PJitTest(jtu.BufferDonationTestCase):
+@@ -1208,6 +1219,7 @@ class PJitTest(jtu.BufferDonationTestCase):
        self.assertEqual(out.shape, input_shape)
        jax.random.key_data(out)  # doesn't crash
  
@@ -751,7 +1058,7 @@ index bfb9451bd..1a349674f 100644
    def test_with_sharding_constraint_is_compatible_error(self):
      mesh = jtu.create_mesh((1, 1, 2), ('replica', 'data', 'mdl'))
  
-@@ -1722,6 +1734,7 @@ class AutoShardingPjitTest(jtu.JaxTestCase):
+@@ -1855,6 +1867,7 @@ class AutoShardingPjitTest(jtu.JaxTestCase):
        self.assertIsInstance(o, array.ArrayImpl)
        self.assertArraysEqual(o._value, input_data)
  
@@ -759,7 +1066,7 @@ index bfb9451bd..1a349674f 100644
    def test_jit_different_mesh_in_auto(self):
      mesh1 = jtu.create_mesh((4,), ('x',))
      dev = jax.devices()
-@@ -1882,6 +1895,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2015,6 +2028,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
          self.assertArraysEqual(s.data, input_data[s.index])
        self.assertArraysEqual(out._value, input_data)
  
@@ -767,7 +1074,7 @@ index bfb9451bd..1a349674f 100644
    def test_unspecified_out_axis_resources(self):
  
      def _checks(out, input_data):
-@@ -2072,6 +2086,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2205,6 +2219,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      self.assertEqual(out.shape, input_shape)
      jax.random.key_data(out)  # doesn't crash
  
@@ -775,7 +1082,7 @@ index bfb9451bd..1a349674f 100644
    def test_globally_sharded_key_array_8x4_multi_device_with_out_sharding(self):
      input_shape = (8, 4)
      mesh = jtu.create_mesh((4, 2), ('x', 'y'))
-@@ -2089,6 +2104,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2222,6 +2237,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      self.assertEqual(out.shape, input_shape)
      jax.random.key_data(out)  # doesn't crash
  
@@ -783,7 +1090,7 @@ index bfb9451bd..1a349674f 100644
    def test_globally_sharded_key_array_8x4_multi_device(self):
      input_shape = (8, 4)
      mesh = jtu.create_mesh((4, 2), ('x', 'y'))
-@@ -2164,6 +2180,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2297,6 +2313,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
        compiled(a1)  # no error
  
    @jtu.thread_unsafe_test()  # cache_info isn't thread-safe
@@ -791,7 +1098,7 @@ index bfb9451bd..1a349674f 100644
    def test_pjit_single_device_sharding_add(self):
      a = np.array([1, 2, 3], dtype=jnp.float32)
      b = np.array([4, 5, 6], dtype=jnp.float32)
-@@ -2254,6 +2271,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2387,6 +2404,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      g = pjit(lambda x: f(jnp.sin(x * 4 + 2)))
      jtu.check_grads(g, (jnp.arange(16.).reshape((4, 4)) / 100,), order=2)
  
@@ -799,15 +1106,15 @@ index bfb9451bd..1a349674f 100644
    def test_fast_path_array(self):
      devices = jax.devices()
      if len(devices) < 8:
-@@ -2338,6 +2356,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
-           "Received incompatible devices for pjitted computation"):
+@@ -2471,6 +2489,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+           "Received incompatible devices for jitted computation"):
          pjit(lambda x, y: (x, y))(uarr, carr)
  
 +  @jtu.skip_on_devices("multimesh") # no support for assemble multiple device arrays
    def test_pjit_uncommitted_array_multi_devices(self):
      shape = (8, 2)
      mesh = jtu.create_mesh((4, 2), ('x', 'y'))
-@@ -2350,6 +2369,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2483,6 +2502,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
          "Having uncommitted Array sharded on multiple devices is not supported."):
        pjit(lambda x: x)(arr)
  
@@ -815,7 +1122,7 @@ index bfb9451bd..1a349674f 100644
    def test_pjit_committed_array_different_devices(self):
      if jax.device_count() < 2:
        self.skipTest('Test requires >= 2 devices')
-@@ -2362,6 +2382,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2495,6 +2515,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
          r"argument y of.*\<lambda\> with shape int.*\[3\] and device ids \[1\].*"):
        pjit(lambda x, y: (x, y))(a, b)
  
@@ -823,15 +1130,15 @@ index bfb9451bd..1a349674f 100644
    def test_pjit_committed_array_different_devices_variadic_args(self):
      if jax.device_count() < 2:
        self.skipTest('Test requires >= 2 devices')
-@@ -2375,6 +2396,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
-         r"\[1\].*"):
-       pjit(lambda *x: x)(a, b)
+@@ -2522,6 +2543,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+     self.assertFalse(y[0].is_deleted())
+     self.assertFalse(y[1].is_deleted())
  
 +  @jtu.skip_on_devices("multimesh") # multimesh allows mismatch with mjit
    def test_pjit_pytree_inp_device_assignment_mismatch(self):
      mesh = jtu.create_mesh((2, 2), ('x', 'y'))
      a = jax.device_put(np.array([1, 2, 3]), jax.devices()[0])
-@@ -2420,6 +2442,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2567,6 +2589,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      self.assertEqual(out2_sharding_id, out3_sharding_id)
  
    @jtu.thread_unsafe_test()  # cache_info isn't thread-safe
@@ -839,7 +1146,7 @@ index bfb9451bd..1a349674f 100644
    def test_out_sharding_indices_id_cache_hit(self):
      shape = (8, 2)
      mesh = jtu.create_mesh((4, 2), ('x', 'y'))
-@@ -2457,6 +2480,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2604,6 +2627,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
        f.lower(tree1).compile()(tree2)
  
    @jax.enable_custom_prng()
@@ -847,7 +1154,7 @@ index bfb9451bd..1a349674f 100644
    def test_device_put_sharding_prng(self):
      mesh = jtu.create_mesh((8,), ('x',))
      s = NamedSharding(mesh, P('x'))
-@@ -2529,6 +2553,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2676,6 +2700,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
          out.sharding._to_xla_hlo_sharding(out.ndim),
          out_s._to_xla_hlo_sharding(out.ndim)))
  
@@ -855,7 +1162,7 @@ index bfb9451bd..1a349674f 100644
    def test_jit_with_sharding_constraint_committed_inp_error(self):
      mesh = jtu.create_mesh((2, 2), ('x', 'y'))
  
-@@ -2563,6 +2588,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2710,6 +2735,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
  
    @jtu.ignore_warning(category=DeprecationWarning,
                        message="backend and device argument")
@@ -863,7 +1170,7 @@ index bfb9451bd..1a349674f 100644
    def test_jit_device_with_sharding_constraint_error(self):
      mesh = jtu.create_mesh((2, 2), ('x', 'y'))
  
-@@ -2578,6 +2604,8 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2725,6 +2751,8 @@ class ArrayPjitTest(jtu.JaxTestCase):
          r"jit with device ids.*"):
        sharded_zeros((4096, 3072), P('x', 'y'))
  
@@ -872,22 +1179,22 @@ index bfb9451bd..1a349674f 100644
    def test_concurrent_pjit(self):
      global_mesh = jtu.create_mesh((1,), ('x',))
      sharding = NamedSharding(global_mesh, P('x',))
-@@ -2652,6 +2680,9 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2799,6 +2827,9 @@ class ArrayPjitTest(jtu.JaxTestCase):
      self.assertArraysEqual(out2, inp_data * 2)
      self.assertEqual(out2.shape, (8, 2))
  
 +  # single device pjit dispatch does not work
-+  # when you are running with multiple GPUs on multimesh
++  # when you are running with multiple GPUs on legate
 +  @jtu.skip_on_devices("multimesh")
    def test_single_device_pjit_cpp_dispatch(self):
      shape = (8, 2)
      mesh = jtu.create_mesh((1,), ('x',))
-@@ -2666,9 +2697,12 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2813,9 +2844,12 @@ class ArrayPjitTest(jtu.JaxTestCase):
            f(arr1)
      self.assertEqual(count(), 1)
  
 +  # single device pjit dispatch does not work
-+  # when you are running with multiple GPUs on multimesh
++  # when you are running with multiple GPUs on legate
 +  @jtu.skip_on_devices("multimesh")
    def test_single_device_add_single_compile(self):
      f1 = pjit(lambda x, y: x + y)
@@ -896,7 +1203,7 @@ index bfb9451bd..1a349674f 100644
                         jax.devices()[0])
      b = jax.device_put(jnp.array([4, 5, 6], dtype=jnp.float32),
                         jax.devices()[0])
-@@ -2727,6 +2761,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2874,6 +2908,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      self.assertArraysEqual(pjit_out1, jit_out1)
      self.assertArraysEqual(pjit_out2, jit_out2)
  
@@ -904,7 +1211,7 @@ index bfb9451bd..1a349674f 100644
    def test_vmap_of_jvp_pjit_no_axis_resources_2d(self):
      mesh = jtu.create_mesh((2, 2), ('x', 'y'))
      f_inp = jnp.arange(8.).reshape(2, 2, 2)
-@@ -2822,6 +2857,10 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -2969,6 +3004,10 @@ class ArrayPjitTest(jtu.JaxTestCase):
      y = f()
      assert y == 4
  
@@ -915,7 +1222,7 @@ index bfb9451bd..1a349674f 100644
    def test_pjit_different_default_device(self):
      if jax.device_count() <= 1:
        self.skipTest('Test requires more >1 device.')
-@@ -3049,6 +3088,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3196,6 +3235,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      out4 = compiled(x)
      _check(out4, jax.devices()[0], x)
  
@@ -923,7 +1230,7 @@ index bfb9451bd..1a349674f 100644
    def test_autodiff_with_device_arg(self):
      if jax.device_count() <= 1:
        self.skipTest('Test requires more >1 device.')
-@@ -3058,7 +3098,8 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3205,7 +3245,8 @@ class ArrayPjitTest(jtu.JaxTestCase):
                              message="backend and device argument"):
        f = pjit(lambda x: x.sum(1) * h.sum(), device=jax.devices()[1])
        g = pjit(lambda x: f(jnp.sin(x * 4 + 2)), device=jax.devices()[1])
@@ -933,16 +1240,17 @@ index bfb9451bd..1a349674f 100644
  
    def test_pjit_device_backend_axis_resources_error(self):
      s = SingleDeviceSharding(jax.devices()[0])
-@@ -3121,6 +3162,8 @@ class ArrayPjitTest(jtu.JaxTestCase):
-     jaxpr = jax.make_jaxpr(g)(3)
-     self.assertNotIn('pjit', str(jaxpr))
+@@ -3279,6 +3320,9 @@ class ArrayPjitTest(jtu.JaxTestCase):
  
+     pjit(foo)(0)  # doesn't crash
+ 
++
 +  # no support for device_put
 +  @jtu.skip_on_devices("multimesh") # no support for device_put
    def test_pmap_in_axis_resources_error(self):
      pmap_out = jax.pmap(lambda x: x)(jnp.arange(jax.device_count()))
      self.assertIsInstance(pmap_out.sharding, jax.sharding.PmapSharding)
-@@ -3135,6 +3178,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3293,6 +3337,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
          r"One of out_shardings.*got sharding.*which is not allowed."):
        pjit(lambda x: x, out_shardings=pmap_out.sharding)
  
@@ -950,7 +1258,7 @@ index bfb9451bd..1a349674f 100644
    def test_pmap_sharding_input_to_pjit_single_device(self):
      pmap_out = jax.pmap(lambda x: x)(jnp.arange(jax.device_count()))
      self.assertIsInstance(pmap_out.sharding, jax.sharding.PmapSharding)
-@@ -3146,6 +3190,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3304,6 +3349,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      # output will be 1 device since it will be resharded.
      self.assertLen(out.devices(), 1)
  
@@ -958,7 +1266,7 @@ index bfb9451bd..1a349674f 100644
    def test_pmap_sharding_input_to_pjit_multi_device(self):
      mesh = jtu.create_mesh((2, 2), ('x', 'y'))
  
-@@ -3165,6 +3210,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3323,6 +3369,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      self.assertTrue(op_shardings.is_op_sharding_replicated(
          out2.sharding._to_xla_hlo_sharding(inp2.ndim)))
  
@@ -966,7 +1274,7 @@ index bfb9451bd..1a349674f 100644
    def test_pmap_sharding_input_pjit_in_axis_resources(self):
      mesh = jtu.create_mesh((2, 2), ('x', 'y'))
  
-@@ -3248,6 +3294,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3406,6 +3453,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
        self.assertArraysAllClose(out, np.sin(inp))
        self.assertLen(out.devices(), 8)
  
@@ -974,7 +1282,7 @@ index bfb9451bd..1a349674f 100644
    def test_jit_with_mesh_context_manager(self):
      mesh = jtu.create_mesh((1,), ('x',))
      with self.assertRaisesRegex(
-@@ -3390,10 +3437,10 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3548,10 +3596,10 @@ class ArrayPjitTest(jtu.JaxTestCase):
          out2.sharding._to_xla_hlo_sharding(out2.ndim))
      self.assertListEqual(ns2, [2, 2, 1, 1])
  
@@ -986,7 +1294,7 @@ index bfb9451bd..1a349674f 100644
      x = jnp.ones((1,))
      with self.assertRaisesRegex(
          ValueError, 'implies that the global size of its dimension 0 should be '
-@@ -3444,6 +3491,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3602,6 +3650,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
        self.assertListEqual(sorted([d.id for d in out1.devices()]),
                             [d.id for d in dev1])
  
@@ -994,7 +1302,7 @@ index bfb9451bd..1a349674f 100644
    def test_device_assignment_mismatch_apply_primitive(self):
      if jax.device_count() < 2:
        self.skipTest("Requires >=2 devices.")
-@@ -3455,6 +3503,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3613,6 +3662,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
          r"of concatenate with shape int.*\[8\].*and argument.*"):
        jnp.concatenate([arr, arr2])
  
@@ -1002,7 +1310,7 @@ index bfb9451bd..1a349674f 100644
    def test_device_put_grad(self):
      if jax.device_count() < 8:
        self.skipTest("Requires >=8 devices.")
-@@ -3509,6 +3558,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3670,6 +3720,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      jtu.check_grads(g, (arr,), order=2)
  
    @jtu.thread_unsafe_test()  # cache_info isn't thread-safe
@@ -1010,7 +1318,7 @@ index bfb9451bd..1a349674f 100644
    def test_pjit_out_sharding_preserved(self):
      if config.use_shardy_partitioner.value:
        raise unittest.SkipTest("Shardy doesn't support PositionalSharding")
-@@ -3558,7 +3608,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3719,7 +3770,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
    def test_cache_hit_pjit_lower_with_cpp_cache_miss(self):
      mesh = jtu.create_mesh((2, 1), ('x', 'y'))
      ns = NamedSharding(mesh, P('x'))
@@ -1019,7 +1327,7 @@ index bfb9451bd..1a349674f 100644
      arr = jax.device_put(np_arr, ns)
  
      def mul(x):
-@@ -3575,8 +3625,9 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3736,8 +3787,9 @@ class ArrayPjitTest(jtu.JaxTestCase):
        self.assertIsInstance(out2.sharding, NamedSharding)
  
      # Drops out of C++ cache i.e. cache miss
@@ -1031,40 +1339,15 @@ index bfb9451bd..1a349674f 100644
  
    def test_list_in_pspec(self):
      mesh = jtu.create_mesh((2,), ('x',))
-@@ -3584,6 +3635,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
-       out = with_sharding_constraint(jnp.arange(8), P(['x']))
-     self.assertEqual(out.sharding, NamedSharding(mesh, P('x')))
- 
-+  @jtu.skip_on_devices("multimesh") # multimesh does not support device_put
-   def test_sharding_preserved_trivial(self):
-     if config.use_shardy_partitioner.value:
-       raise unittest.SkipTest("Shardy doesn't support PositionalSharding")
-@@ -3603,6 +3655,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
-     out2 = pjit(identity)(arr2)
-     self.assertIsInstance(out2.sharding, PositionalSharding)
- 
-+
-   def test_wsc_error_on_none(self):
-     with self.assertRaisesRegex(
-         ValueError,
-@@ -3610,6 +3663,8 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3752,6 +3804,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
          ' not allowed'):
        with_sharding_constraint(jnp.arange(8), None)
- 
-+
-+  @jtu.skip_on_devices("multimesh") # multimesh does not support device_put
-   def test_sharding_preserved_aot(self):
-     mesh = jtu.create_mesh((2, 1), ('x', 'y'))
-     ns = NamedSharding(mesh, P('x'))
-@@ -3627,6 +3682,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
-     # Compiled which bakes in the output sharding.
-     self.assertIsInstance(out2.sharding, NamedSharding)
  
 +  @jtu.skip_on_devices("multimesh") # multimesh does not support device_put
    def test_sharding_on_output_with_vmap(self):
      mesh = jtu.create_mesh((2, 1), ('x', 'y'))
      ns = NamedSharding(mesh, P('x'))
-@@ -3646,6 +3702,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3771,6 +3824,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      self.assertEqual(count(), 1)
  
    @jtu.thread_unsafe_test()  # cache_info isn't thread-safe
@@ -1072,7 +1355,7 @@ index bfb9451bd..1a349674f 100644
    def test_jit_mul_sum_sharding_preserved(self):
      if config.use_shardy_partitioner.value:
        raise unittest.SkipTest("Shardy doesn't support PositionalSharding")
-@@ -3715,6 +3772,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3840,6 +3894,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      self.assertEqual(out2.sharding.mesh, mesh)
      self.assertEqual(out2.sharding.spec, P())
  
@@ -1080,7 +1363,7 @@ index bfb9451bd..1a349674f 100644
    def test_sharding_preserved_apply_primitive(self):
      if config.use_shardy_partitioner.value:
        raise unittest.SkipTest("Shardy doesn't support PositionalSharding")
-@@ -3740,6 +3798,8 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3865,6 +3920,8 @@ class ArrayPjitTest(jtu.JaxTestCase):
      self.assertIsInstance(out4.sharding, SingleDeviceSharding)
      self.assertEqual(out4.devices(), {jax.devices()[1]})
  
@@ -1089,7 +1372,7 @@ index bfb9451bd..1a349674f 100644
    def test_same_named_sharding_pspec_on_eager_ops(self):
      mesh = jtu.create_mesh((1, 8, 1), ('x', 'y', 'z'))
      sharding = jax.sharding.NamedSharding(mesh, P('x', 'y', 'z'))
-@@ -3817,6 +3877,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
+@@ -3942,6 +3999,7 @@ class ArrayPjitTest(jtu.JaxTestCase):
      out = with_sharding_constraint(inp, NamedSharding(mesh, P('x')))
      self.assertEqual(id(out), id(inp))
  
@@ -1097,7 +1380,7 @@ index bfb9451bd..1a349674f 100644
    def test_wsc_eager_different_order_devices(self):
      mesh1 = jtu.create_mesh((2,), ('x',))
      mesh2 = jax.sharding.Mesh([jax.devices()[1], jax.devices()[0]], 'x')
-@@ -7006,6 +7067,7 @@ class PJitErrorTest(jtu.JaxTestCase):
+@@ -8024,6 +8082,7 @@ class PJitErrorTest(jtu.JaxTestCase):
      out = pjit(lambda x: x, in_shardings=None, out_shardings=None)(jnp.arange(4))
      self.assertEqual(out.sharding, SingleDeviceSharding(jax.devices()[0]))
  
@@ -1105,7 +1388,7 @@ index bfb9451bd..1a349674f 100644
    def test_pspec_to_wsc_without_mesh(self):
      error = (
          r'with_sharding_constraint requires a non-empty mesh if you are '
-@@ -7400,6 +7462,8 @@ class UtilTest(jtu.JaxTestCase):
+@@ -8415,6 +8474,8 @@ class UtilTest(jtu.JaxTestCase):
      self.assertTrue(op_shardings.are_op_shardings_equal(op3, op4))
  
    def test_op_sharding_manual_replicated(self):

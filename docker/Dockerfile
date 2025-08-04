@@ -1,7 +1,11 @@
 ARG CUDA_VERSION="12.8.1"
 ARG CUDNN_VERSION=""
 ARG FINAL_IMAGE_BASE=distribute
-FROM nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-devel-ubuntu22.04 AS base
+ARG REALM_BASE_IMAGE=reinstall_custom_jax
+ARG ZUKU_BASE_IMAGE=install_realm
+ARG MULTIMESH_BASE_IMAGE=install_zuku
+ARG CUDA_BASE_IMAGE=nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-devel-ubuntu22.04
+FROM ${CUDA_BASE_IMAGE} AS base
 
 SHELL [ "/bin/bash", "-eo", "pipefail", "-c" ]
 
@@ -129,7 +133,7 @@ COPY workspace/realm /opt/workspace/realm
 COPY workspace/zuku /opt/workspace/zuku
 COPY workspace/multimesh-jax /opt/workspace/multimesh-jax
 
-FROM reinstall_custom_jax AS build_realm
+FROM ${REALM_BASE_IMAGE} AS build_realm
 ARG BUILD_TYPE=Release
 COPY workspace/realm /opt/workspace/realm
 COPY scripts/realm/* /opt/workspace/realm
@@ -139,14 +143,14 @@ RUN --mount=type=cache,target=/ccache/realm \
 RUN --mount=type=cache,target=/ccache/realm \
   /opt/workspace/realm/build.sh
 
-FROM reinstall_custom_jax AS install_realm
+FROM ${REALM_BASE_IMAGE} AS install_realm
 RUN --mount=type=cache,from=build_realm,source=/opt/build/realm,target=/opt/build/realm \
   --mount=type=cache,from=build_realm,source=/opt/workspace/realm,target=/opt/workspace/realm \
   --mount=type=cache,from=build_realm,source=/opt/lib,target=/opt/lib \
   --mount=type=cache,target=/ccache/realm \
   /opt/workspace/realm/install.sh
 
-FROM install_realm AS build_zuku
+FROM ${ZUKU_BASE_IMAGE} AS build_zuku
 ARG BUILD_TYPE=Release
 COPY workspace/zuku /opt/workspace/zuku
 COPY scripts/zuku/* /opt/workspace/zuku
@@ -158,14 +162,14 @@ RUN --mount=type=cache,target=/ccache/zuku \
 RUN --mount=type=cache,target=/ccache/zuku \
   /opt/workspace/zuku/build.sh
 
-FROM install_realm AS install_zuku
+FROM ${ZUKU_BASE_IMAGE} AS install_zuku
 RUN --mount=type=cache,target=/ccache/zuku \
     --mount=type=cache,from=build_zuku,source=/opt/build/zuku,target=/opt/build/zuku \
     --mount=type=cache,from=build_zuku,source=/opt/lib,target=/opt/lib \
     --mount=type=cache,from=build_zuku,source=/opt/workspace/zuku,target=/opt/workspace/zuku \
   /opt/workspace/zuku/install.sh
 
-FROM install_zuku AS build_multimesh_plugin
+FROM ${MULTIMESH_BASE_IMAGE} AS build_multimesh_plugin
 ARG BUILD_TYPE=Release
 ARG BAZEL_CACHE=grpc://host.docker.internal:9092
 COPY workspace/multimesh-jax /opt/workspace/multimesh-jax
@@ -181,7 +185,7 @@ RUN \
   --mount=type=cache,from=build_realm,source=/opt/workspace/realm,target=/opt/workspace/realm \
   /opt/workspace/multimesh-jax/build.sh
 
-FROM install_zuku AS install_multimesh_plugin
+FROM ${MULTIMESH_BASE_IMAGE} AS install_multimesh_plugin
 COPY rapids-cmake /opt/rapids-cmake
 RUN --mount=type=cache,from=build_multimesh_plugin,source=/opt/build/multimesh-jax,target=/opt/build/multimesh-jax \
   --mount=type=cache,from=build_multimesh_plugin,source=/opt/workspace/xla,target=/opt/workspace/xla \
@@ -190,9 +194,18 @@ RUN --mount=type=cache,from=build_multimesh_plugin,source=/opt/build/multimesh-j
   --mount=type=cache,from=build_multimesh_plugin,source=/root/.cache/bazel,target=/root/.cache/bazel \
     /opt/workspace/multimesh-jax/install.sh
 
-FROM install_multimesh_plugin AS install_tools
+FROM install_multimesh_plugin AS download_tools
+ARG INCLUDE_NSYS=
+ARG NSYS_URL=
 RUN --mount=type=bind,source=scripts/tools,target=/opt/scripts/tools \
-  /opt/scripts/tools/install.sh jupyter
+ NSYS_URL=${NSYS_URL} /opt/scripts/tools/download.sh jupyter ${INCLUDE_NSYS}
+
+FROM install_multimesh_plugin AS install_tools
+ARG INCLUDE_NSYS=
+ARG NSYS_DEB=
+RUN --mount=type=bind,source=scripts/tools,target=/opt/scripts/tools \
+  --mount=type=cache,from=download_tools,source=/opt/tools,target=/opt/tools \
+  NSYS_DEB=${NSYS_DEB} /opt/scripts/tools/install.sh jupyter ${INCLUDE_NSYS}
 
 FROM install_tools AS distribute
 COPY apt-base /opt/source/apt-base
@@ -204,8 +217,10 @@ COPY ucx /opt/source/ucx
 COPY te /opt/source/te
 COPY workspace/xla /opt/source/xla
 
-FROM ${FINAL_IMAGE_BASE} as final_image
+FROM ${FINAL_IMAGE_BASE} AS final_image
 COPY workspace/maxtext-scripts/run.py /opt/maxtext/run.py
+COPY workspace/maxtext-scripts/validate-cpu.sh /opt/maxtext/validate-cpu.sh
+COPY workspace/multimesh-jax /opt/workspace/multimesh-jax
 
 COPY entrypoint.sh /opt/entrypoint.sh
 ENTRYPOINT [ "/opt/entrypoint.sh" ]

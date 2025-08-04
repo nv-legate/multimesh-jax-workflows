@@ -18,6 +18,7 @@ python ./run.py \
    --nodes 1 \
    --dp 2 \
    --tp 2 \
+   --ep 1 \
    --pp 2 \
    --fsdp 1 \
    --num-layers 2 \
@@ -29,10 +30,12 @@ python ./run.py \
    --model-dims 256 \
    --num-steps 3 \
    --use-iota-embed \
+   --model-name mixtral-small \
    --xla-rs-threshold=51200 \
    --remat minimal \
    --replicate-small-params \
    --use-nccl-comm-split \
+   --load-balance-decoder-norm \
    --dump dump \
    --autoshard \
    --backend multimesh \

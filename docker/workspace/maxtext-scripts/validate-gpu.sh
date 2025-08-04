@@ -22,6 +22,7 @@ python ./run.py \
    --dp 1 \
    --tp $gpus \
    --pp 1 \
+   --ep 1 \
    --fsdp 1 \
    --num-layers 4 \
    --batch-size 4 \
@@ -34,7 +35,6 @@ python ./run.py \
    --remat minimal \
    --replicate-small-params \
    --use-nccl-comm-split \
-   --sequence-parallel \
    --dump dump \
    --dump-mpmd-passes \
    --autoshard \

@@ -1,63 +1,65 @@
 #!/bin/bash
 
+# launch file to run gpt3-175b
+
+# Note: this file is configured to be launched via slurm tasks
+# Note: use your appropriate launcher environment var to determine the rank of the GPU
+RANK=${SLURM_PROCID}
+
+GPUS_PER_NODE=8
+
+# xla by default allocates many threads, which can conflict with
+# the threads used by the plugin client and makes backtraces
+# harder to debug and interpret.
 export PJRT_NPROC=16
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export TF_NUM_INTEROP_THREADS=1
 export TF_NUM_INTRAOP_THREADS=1
-export TF_CPP_MIN_LOG_LEVEL=0
-export TF_CPP_MAX_LOG_LEVEL=1
 
 
-RANK=${OMPI_COMM_WORLD_RANK}
-export CUDA_VISIBLE_DEVICES=${RANK}
+# prefix launch command with nsys_cmd to collect nsight traces 
+# nsys_cmd="nsys profile --trace=nvtx -o nsys_${RANK} --force-overwrite=true"
 
-to_profile=$(( RANK % 8))
-if [ "$to_profile" == "0" ]; then
-  nsys_cmd="nsys profile --trace=nvtx -o nsys_${RANK} --force-overwrite=true"
-else
-  nsys_cmd=""
-fi
+# limit the visibility of devices to only the one that the process will be running (1 process/device)
+intra_node_rank=$(( RANK % GPUS_PER_NODE ))
+export CUDA_VISIBLE_DEVICES=${intra_node_rank}
 
 cpus=(0-13,112-125  14-27,126-139  28-41,140-153  42-55,154-167  56-69,168-181  70-83,182-195  84-97,196-209  98-111,210-223)
 mems=(0 0 0 0 1 1 1 1)
 
-intra_node_rank=$(( RANK % 8 ))
 cpu_binding="${cpus[$intra_node_rank]}"
 mem_binding="${mems[$intra_node_rank]}"
 
-export MULTIMESH_HOIST_CONVERT=1
-
-$nsys_cmd \
+# run training
 numactl --physcpubind $cpu_binding \
-	--membind $mem_binding \
-python `pwd`/run.py \
+        --membind $mem_binding \
+python /opt/maxtext/run.py \
+    --fbmem 77 \
     --cpus 1 \
     --gpus 1 \
-    --fbmem 77 \
     --nodes 64 \
-    --pp 8 \
-    --tp 8 \
     --dp 1 \
     --fsdp 1 \
-    --num-layers 96 \
+    --pp 8 \
+    --tp 8 \
     --interleave 12 \
     --model-name gpt3-175b \
-    --model-dims 12288 \
-    --num-heads 96 \
-    --xla-rs-threshold=51200 \
-    --attention=cudnn_flash_te \
-    --remat minimal \
+    --num-layers 96 \
     --sequence-length=2048 \
     --batch-size 128 \
     --microbatch-size 4 \
-    --network ucx \
-    --profile \
+    --remat minimal \
+    --attention=cudnn_flash_te \
+    --xla-rs-threshold=51200 \
+    --use-nccl-comm-split \
     --replicate-small-params \
-    --schedule wavefront \
-    --load-balance-embeddings \
-    --no-sequence-parallel \
+    --no-hoist-loop-convert \
+    --network ucx \
+    --schedule prefetch-wavefront \
     --autoshard \
-    --num-steps 8 \
+    --num-steps 10 \
+    --debug info \
     --backend multimesh \
-    --debug info >& ${RANK}.out
+    -logfile jax_%.log \
+    >& ${RANK}.out

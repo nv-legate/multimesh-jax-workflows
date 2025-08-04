@@ -34,8 +34,8 @@ mem_binding="${mems[$intra_node_rank]}"
 # run training
 numactl --physcpubind $cpu_binding \
         --membind $mem_binding \
-python /workspace/cwd/run.py \
-    --fbmem 78 \
+python /opt/maxtext/run.py \
+    --fbmem 77 \
     --cpus 1 \
     --gpus 1 \
     --nodes 16 \
@@ -53,7 +53,6 @@ python /workspace/cwd/run.py \
     --attention=cudnn_flash_te \
     --xla-rs-threshold=51200 \
     --use-nccl-comm-split \
-    --only-fuse-loop-tasks \
     --replicate-small-params \
     --hoist-loop-convert \
     --network ucx \

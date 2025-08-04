@@ -35,6 +35,16 @@ echo "build --repo_env HERMETIC_PYTHON_VERSION=${python_version}" >> xla_configu
 echo "build:cuda --@local_config_cuda//cuda:include_cuda_libs=false" >> xla_configure.bazelrc
 echo "build:cuda_libraries_from_stubs --@local_config_cuda//cuda:include_cuda_libs=false" >> xla_configure.bazelrc
 
+cat <<EOF >> xla_configure.bazelrc
+build:asan --strip=never
+build:asan --copt -fsanitize=address
+build:asan --copt -DADDRESS_SANITIZER
+build:asan --copt -O2
+build:asan --copt -g
+build:asan --copt -fno-omit-frame-pointer
+build:asan --linkopt -fsanitize=address
+EOF
+
 popd
 
 # stash the configure for later

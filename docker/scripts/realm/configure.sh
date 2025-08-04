@@ -24,6 +24,7 @@ conda run --no-capture-out -n legere cmake -S . -B ${BUILD_DIR} -DCMAKE_GENERATO
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O2 -ggdb" \
   -DCMAKE_CXX_FLAGS_DEBUG="-O0 -ggdb" \
+  -DBUILD_MARCH= \
   -DLegion_CUDA_DYNAMIC_LOAD:BOOL=ON \
   -DLegion_MAX_DIM:STRING=5 -DLegion_USE_OpenMP:BOOL=ON -DLegion_USE_GASNet:BOOL=OFF \
   -DLegion_USE_Python:BOOL=OFF -DLegion_VERSION:STRING=24.9.0 -DLegion_BUILD_BINDINGS:BOOL=OFF \

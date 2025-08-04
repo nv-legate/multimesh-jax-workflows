@@ -3,9 +3,14 @@ FROM ${COMMIT_IMAGE} AS commit
 
 COPY workspace/jax /opt/workspace/jax
 COPY workspace/multimesh-jax /opt/workspace/multimesh-jax
+COPY workspace/maxtext /opt/workspace/maxtext
 
+ARG INCLUDE_NSYS=
+ARG NSYS_URL=
+ARG NSYS_DEB=
 RUN --mount=type=bind,source=scripts/tools,target=/opt/scripts/tools \
-  /opt/scripts/tools/install.sh nsys
+  NSYS_URL=${NSYS_URL} /opt/scripts/tools/download.sh ${INCLUDE_NSYS} \
+  NSYS_DEB=${NSYS_DEB} && /opt/scripts/tools/install.sh ${INCLUDE_NSYS}
 
 COPY entrypoint.sh /opt/entrypoint.sh
 COPY workspace/maxtext-scripts/run.py /opt/maxtext/run.py

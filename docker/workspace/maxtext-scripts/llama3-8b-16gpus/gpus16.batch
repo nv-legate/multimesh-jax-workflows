@@ -1,0 +1,25 @@
+#! /usr/bin/env bash
+
+#!/bin/bash
+#SBATCH -p batch
+#SBATCH --output multimesh.out
+#SBATCH --error multimesh.err
+#SBATCH -A <account>
+#SBATCH -J <job_name>
+#SBATCH -N 2
+#SBATCH -t 0:20:00
+
+srun \
+  -N 2 \
+  --ntasks-per-node 8 \
+  --mpi=pmix \
+  --container-image ghcr.io/nv-legate/multimesh-jax:v0.2 \
+  --container-name multimesh-jax \
+  --container-mounts `pwd`:/workspace/cwd \
+  --container-workdir /workspace/cwd \
+  --no-container-mount-home \
+  --no-container-entrypoint \
+  /opt/entrypoint.sh \
+  /workspace/cwd/run-dgx-h100.sh
+
+

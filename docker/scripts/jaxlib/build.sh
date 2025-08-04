@@ -40,6 +40,7 @@ fi
 conda run --no-capture-out -n legere python build/build.py build \
   --bazel_startup_options=--batch \
   --bazel_options=--override_repository=xla=/opt/workspace/xla \
+  --bazel_options=--linkopt=-fuse-ld=lld \
   $remote_cache_option \
   --bazel_startup_options=--output_base=/opt/build/jaxlib \
   --output_path=/opt/build/jaxlib \

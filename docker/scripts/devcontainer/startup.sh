@@ -7,6 +7,7 @@ BAZEL_CACHE=grpc://host.docker.internal:9092
 BUILD_TYPE=${1:-Release}
 BUILD_DIR=/opt/build
 LIB_DIR=/opt/lib
+BUILD_TESTS=ON
 
 # map the git submodule worktrees to the correct path
 mkdir -p /docker
@@ -18,8 +19,12 @@ git config --global --add safe.directory /opt/workspace/multimesh-jax
 git config --global --add safe.directory /opt/workspace/realm
 git config --global --add safe.directory /opt/workspace/zuku
 git config --global --add safe.directory /opt/workspace/maxtext
+git config --global --add safe.directory /opt/workspace/jax
 
+# clear out all previous maxtext from the devcontainer base
+rm -rf /opt/maxtext
 pushd /opt/workspace/maxtext
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 python -m pip install -e . --force-reinstall --no-deps
 popd
 
@@ -41,9 +46,13 @@ git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 popd
 
 pushd /opt/workspace/multimesh-jax
-/opt/scripts/multimesh-jax/configure.sh ${BUILD_TYPE} ${BAZEL_CACHE}
+/opt/scripts/multimesh-jax/configure.sh ${BUILD_TYPE} ${BAZEL_CACHE} ${BUILD_TESTS}
 /opt/scripts/multimesh-jax/build.sh
-/opt/scripts/multimesh-jax/install.sh
+/opt/scripts/multimesh-jax/install.sh -e
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+popd
+
+pushd /opt/workspace/multimesh-jax
 git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 popd
 
@@ -55,5 +64,5 @@ echo "source ~/git-completion.bash" >> .bashrc
 echo "settings set target.disable-aslr false" >> .lldbinit
 
 pushd /opt/workspace/xla
-#/opt/xla-compile-commands.sh
+/opt/scripts/xla-compile-commands.sh
 popd

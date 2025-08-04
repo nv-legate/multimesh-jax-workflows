@@ -91,7 +91,7 @@
             "label": "Commit and Upload Devcontainer",
             "type": "shell",
             "group": "build",
-            "command": "./build.py",
+            "command": "${workspaceFolder}/docker/build.py",
             "options": {
               "cwd": "${workspaceFolder}/workspaces/${input:workspace_folder}/docker",
               "env": {}
@@ -101,7 +101,29 @@
                 "${input:workspace_folder}_realm_jax_devcontainer",
                 "--tag",
                 "${input:workspace_folder}_realm_jax_devcontainer",
-                "--upload"
+                "--upload",
+                "--include-nsys"
+            ]
+        },
+        {
+            "label": "Commit and Sqsh Devcontainer",
+            "type": "shell",
+            "group": "build",
+            "command": "${workspaceFolder}/docker/build.py",
+            "options": {
+              "cwd": "${workspaceFolder}/workspaces/${input:workspace_folder}/docker",
+              "env": {}
+            },
+            "args" : [
+                "--commit",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--tag",
+                "${input:workspace_folder}_realm_jax_devcontainer",
+                "--upload",
+                "--include-nsys",
+                "--sqsh",
+                "--remote",
+                "${input:remote}"
             ]
         },
         {
@@ -110,64 +132,18 @@
             "group": "test",
             "command": "${command:python.interpreterPath}",
             "options": {
-              "cwd": "${workspaceFolder}/docker",
+              "cwd": "${workspaceFolder}/workspaces/${input:workspace_folder}/docker",
               "env": {}
             },
             "args" : [
                 "${workspaceFolder}/docker/build.py",
                 "--commit",
                 "${input:workspace_folder}_realm_jax_devcontainer",
-                "--tag",
-                "${input:workspace_folder}_realm_jax_devcontainer",
                 "--upload",
                 "--validate",
-                "medium",
-                "--remote",
-                "${input:remote}"
-            ]
-        },
-        {
-            "label": "Commit and Test Devcontainer #2",
-            "type": "shell",
-            "group": "test",
-            "command": "${command:python.interpreterPath}",
-            "options": {
-              "cwd": "${workspaceFolder}/docker",
-              "env": {}
-            },
-            "args" : [
-                "${workspaceFolder}/docker/build.py",
-                "--commit",
-                "${input:workspace_folder}_realm_jax_devcontainer",
+                "${input:validation_size}",
                 "--tag",
-                "${input:workspace_folder}_realm_jax_devcontainer",
-                "--upload",
-                "--validate",
-                "medium",
-                "--remote",
-                "${input:remote}"
-            ]
-        },
-        {
-            "label": "Commit and Test Devcontainer #3",
-            "type": "shell",
-            "group": "test",
-            "command": "${command:python.interpreterPath}",
-            "options": {
-              "cwd": "${workspaceFolder}/docker",
-              "env": {}
-            },
-            "args" : [
-                "${workspaceFolder}/docker/build.py",
-                "--commit",
-                "${input:workspace_folder}_realm_jax_devcontainer",
-                "--tag",
-                "${input:workspace_folder}_realm_jax_devcontainer",
-                "--upload",
-                "--validate",
-                "medium",
-                "--remote",
-                "${input:remote}"
+                "${input:tag}"
             ]
         },
         {
@@ -230,6 +206,17 @@
             "id": "remote",
             "description": "The remote server to run on",
             "default": "eos",
+            "type": "promptString"
+        },
+        {
+            "id": "tag",
+            "description": "A unique tag for the build/run",
+            "type": "promptString"
+        },
+        {
+            "id": "validation_size",
+            "description": "The tests (small, large, all) to run",
+            "default": "small",
             "type": "promptString"
         }
     ]

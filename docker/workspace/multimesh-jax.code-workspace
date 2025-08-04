@@ -7,6 +7,9 @@
       "path": "xla",
     },
     {
+      "path": "jax",
+    },
+    {
       "path": "maxtext",
     },
     {
@@ -26,7 +29,7 @@
         "label": "Compile MultiMesh-Jax",
         "type": "shell",
         "group": "build",
-        "command": "cmake --build ${workspaceFolder:multimesh-jax}/build",
+        "command": "cmake --build /opt/build/multimesh-jax",
         "options": {
           "cwd": "${workspaceFolder:multimesh-jax}",
           "env": {},
@@ -65,13 +68,13 @@
           "-j",
           "16",
           "--test-dir",
-          "build",
+          "/opt/build/multimesh-jax",
           "-R",
           "MpmdPartitionTest.*",
         ]
       },
       {
-        "label": "Run XLA executable smoke tests",
+        "label": "Run MPMD executable tests",
         "type": "shell",
         "group": "test",
         "command": "ctest",
@@ -83,136 +86,36 @@
         },
         "args" : [
           "--test-dir",
-          "build",
+          "/opt/build/multimesh-jax",
+          "-j",
+          "16",
           "-R",
-          "MultiMeshExecutableTest.TransformerTwoNodesHostOffload",
+          "MultiMeshExecutableTest",
         ]
       },
       {
-        "label": "Run XLA smoke tests",
-        "group": "test",
-        "dependsOn": ["Run XLA executable smoke tests", "Run MPMD partition tests"],
-      },
-      {
-        "label": "Run JAX microbatch single GPU tests",
+        "label": "Run JAX Python tests",
         "type": "shell",
         "group": "test",
-        "command": "${command:python.interpreterPath}",
+        "command": "bash",
         "options": {
           "cwd": "${workspaceFolder:multimesh-jax}",
         },
         "args" : [
-          "tests/python/jax_microbatch_test.py",
-          "--gpus",
-          "1",
+          "scripts/run-py-tests.sh",
         ]
       },
       {
-        "label": "Run JAX microbatch multi-CPU tests",
+        "label": "Run CI tests",
         "type": "shell",
         "group": "test",
-        "command": "${command:python.interpreterPath}",
+        "command": "bash",
         "options": {
           "cwd": "${workspaceFolder:multimesh-jax}",
         },
         "args" : [
-          "tests/python/jax_microbatch_test.py",
-          "--gpus",
-          "0",
-          "--cpus",
-          "4"
+          "scripts/run-ci.sh",
         ]
-      },
-      {
-        "label": "Run JAX task multi-GPU tests",
-        "type": "shell",
-        "group": "test",
-        "command": "${command:python.interpreterPath}",
-        "options": {
-          "cwd": "${workspaceFolder:multimesh-jax}",
-        },
-        "args" : [
-          "tests/python/jax_task_test.py",
-          "--gpus",
-          "2",
-          "--cpus",
-          "2"
-        ]
-      },
-      {
-        "label": "Run JAX auto-task multi-GPU tests",
-        "type": "shell",
-        "group": "test",
-        "command": "${command:python.interpreterPath}",
-        "options": {
-          "cwd": "${workspaceFolder:multimesh-jax}",
-        },
-        "args" : [
-          "tests/python/jax_auto_task_test.py",
-          "--gpus",
-          "2",
-          "--cpus",
-          "2"
-        ]
-      },
-      {
-        "label": "Run JAX auto-task 4 CPU tests",
-        "type": "shell",
-        "group": "test",
-        "command": "${command:python.interpreterPath}",
-        "options": {
-          "cwd": "${workspaceFolder:multimesh-jax}",
-        },
-        "args" : [
-          "tests/python/jax_auto_task_test.py",
-          "--gpus",
-          "0",
-          "--cpus",
-          "4"
-        ]
-      },
-      {
-        "label": "Run JAX auto-task 8 CPU tests",
-        "type": "shell",
-        "group": "test",
-        "command": "${command:python.interpreterPath}",
-        "options": {
-          "cwd": "${workspaceFolder:multimesh-jax}",
-        },
-        "args" : [
-          "tests/python/jax_auto_task_test.py",
-          "--gpus",
-          "0",
-          "--cpus",
-          "8"
-        ]
-      },
-      {
-        "label": "Run JAX CPU tests",
-        "group": "test",
-        "dependsOn": [
-          "Run JAX microbatch multi-CPU tests",
-          "Run JAX auto-task 4 CPU tests",
-          "Run JAX auto-task 8 CPU tests",
-        ],
-      },
-      {
-        "label": "Run JAX GPU tests",
-        "group": "test",
-        "dependsOrder": "sequence",
-        "dependsOn": [
-          "Run JAX microbatch single GPU tests",
-          "Run JAX task multi-GPU tests",
-          "Run JAX auto-task multi-GPU tests",
-        ],
-      },
-      {
-        "label": "Run JAX tests",
-        "group": "test",
-        "dependsOn": [
-          "Run JAX GPU tests",
-          "Run JAX CPU tests",
-        ],
       },
     ],
   },

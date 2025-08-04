@@ -36,7 +36,7 @@ python ./run.py \
    --remat minimal \
    --replicate-small-params \
    --use-nccl-comm-split \
-   --sequence-parallel \
+   --network ucx \
    --dump dump \
    --dump-mpmd-passes \
    --autoshard \

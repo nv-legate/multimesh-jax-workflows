@@ -18,3 +18,8 @@ chmod u+x llvm.sh
 apt-get install clangd-17 clang-tidy-17
 
 conda install -c conda-forge -y ninja pybind11 ccache
+
+conda run -n legere python -m pip install scikit-build
+
+# symlink clangd
+ln -s /usr/bin/clangd-17 /usr/bin/clangd

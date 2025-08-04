@@ -5,24 +5,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
-import json
 import os
-import subprocess as sp
+import re
 import sys
 from pathlib import Path
 from subprocess import CalledProcessError
+from typing import Optional
 
 import yaml
 from subprocess_tee import run
 
 try:
-    from eos_workflows import (
-        get_config,
-        get_remote_config,
-        get_worker_addr,
-        save_maxtext_image,
-        validate_maxtext_image,
-    )
+    from eos_workflows import get_config, save_sqsh_image
+
+    from multimesh_jax_workflows import run_multimesh_testsuite
 
     user_config = get_config()
     repo_config_path = Path(__file__).parent.parent / "config.yml"
@@ -30,6 +26,11 @@ try:
         repo_config = yaml.safe_load(f)
 except ImportError:
     pass
+
+
+def check_arg_None(arg: str) -> Optional[str]:
+    return None if arg == "None" else arg
+
 
 parser = argparse.ArgumentParser(allow_abbrev=False)
 
@@ -52,6 +53,21 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--base-component",
+    type=str,
+    choices=["realm", "zuku", "multimesh", "cuda", "None"],
+    default=None,
+    help="The component to start building from",
+)
+
+parser.add_argument(
+    "--base-image",
+    type=str,
+    default=None,
+    help="The base image to use for the build",
+)
+
+parser.add_argument(
     "--dry-run",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -59,10 +75,17 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--save-remote",
+    "--include-nsys",
     action=argparse.BooleanOptionalAction,
     default=False,
-    help="Whether to save the image on a remote filesystem",
+    help="Whether to include nsys in the final container build",
+)
+
+parser.add_argument(
+    "--nsys-url",
+    type=str,
+    default="https://developer.nvidia.com/downloads/assets/tools/secure/nsight-systems/2025_3/nsight-systems-2025.3.1_2025.3.1.90-1_amd64.deb",  # noqa: E501
+    help="The download location for the nsys deb file",
 )
 
 parser.add_argument(
@@ -90,16 +113,23 @@ parser.add_argument(
 parser.add_argument(
     "--validate",
     type=str,
-    choices=["small", "medium", "large"],
     default=None,
-    help="Run the specified validation job",
+    choices=["small", "medium", "large", "moe", "convergence", "zero-bubble", "all"],
+    help="Run a validation job on the generated image",
 )
 
 parser.add_argument(
-    "--skip-save",
+    "--sqsh",
     action=argparse.BooleanOptionalAction,
     default=False,
-    help="Skip the save sqsh step when running validation",
+    help="save a sqsh image",
+)
+
+parser.add_argument(
+    "--sqsh-before-validate",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="save a sqsh image before validating",
 )
 
 parser.add_argument(
@@ -110,13 +140,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--include-source", action=argparse.BooleanOptionalAction, default=True
+    "--include-source", action=argparse.BooleanOptionalAction, default=False
 )
 
 parser.add_argument(
     "--stage",
     type=str,
-    default="install_multimesh_plugin",
+    default="final_image",
     help="the stage to build up to",
 )
 
@@ -148,9 +178,6 @@ parser.add_argument(
     default=None,
     help="The tag to use for naming the image",
 )
-parser.add_argument(
-    "--latest", action=argparse.BooleanOptionalAction, default=False
-)  # noqa: E501
 
 parser.add_argument(
     "--repo",
@@ -172,10 +199,26 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+args.base_image = check_arg_None(args.base_image)
+args.base_component = check_arg_None(args.base_component)
+
 dockerfile = "Dockerfile"
 short_image_name = args.name
 
-tag = args.tag or args.stage or args.framework
+
+def add_nsys_args(cmds, args):
+    if args.include_nsys:
+        cmds.append("--build-arg")
+        cmds.append("INCLUDE_NSYS=nsys")
+        deb_name = Path(args.nsys_url).name
+        cmds.append("--build-arg")
+        cmds.append(f"NSYS_URL={args.nsys_url}")
+        cmds.append("--build-arg")
+        cmds.append(f"NSYS_DEB={deb_name}")
+        cmds.append("--network=host")
+
+
+tag = args.tag or args.commit or args.stage or args.framework
 image_name = f"{short_image_name}:{tag}"
 
 try:
@@ -183,7 +226,8 @@ try:
         # first commit a temp image
         temp_image_name = f"{image_name}_temp"
         cmds = ["docker", "commit", args.commit, temp_image_name]
-        run(cmds, check=True)
+        if not args.dry_run:
+            run(cmds, check=True)
 
         # add the necessary workspace folders into the image
         cmds = [
@@ -197,11 +241,14 @@ try:
             f"COMMIT_IMAGE={temp_image_name}",
             ".",
         ]
-        run(cmds, check=True)
+        add_nsys_args(cmds, args)
+        if not args.dry_run:
+            run(cmds, check=True)
 
         # remove the temp commit image
         cmds = ["docker", "rmi", "-f", temp_image_name]
-        run(cmds, check=True)
+        if not args.dry_run:
+            run(cmds, check=True)
     elif args.build:
         cmds = [
             "docker",
@@ -242,66 +289,71 @@ try:
             cmds.append("--build-arg")
             cmds.append(f"{arg}={value}")
 
+        if args.base_image:
+            if args.base_component is None:
+                raise ValueError(
+                    "must give a --base-component for the --base-image"
+                )  # noqa: E501
+            cmds.append("--build-arg")
+            cmds.append(
+                f"{args.base_component.upper()}_BASE_IMAGE={args.base_image}"
+            )  # noqa: E501
+
+        add_nsys_args(cmds, args)
         print(" ".join(cmds))
 
-        output = run(cmds, check=True)
+        if not args.dry_run:
+            output = run(cmds, check=True)
 
 except CalledProcessError as cp:
     if cp.returncode != 0:
         sys.exit(cp.returncode)
 
-remote_image = f"{args.repo}/{image_name}"
-if args.upload:
-    os.system(f"docker tag {image_name} {remote_image}")
-    print(f"Pushing to {remote_image}")
-    os.system(f"docker push {remote_image}")
-    if args.latest:
-        latest_image = f"{args.repo}/{short_image_name}:latest"
-        print(f"Pushing to {latest_image}")
-        os.system(f"docker push {latest_image}")
+if (args.validate or args.upload) and args.stage == "final_image" and not args.dry_run:
+    # make sure the image passes smoke test before pushing
+    cmd = [
+        "docker",
+        "run",
+        "--entrypoint",
+        "/opt/entrypoint.sh",
+        image_name,
+        "python",
+        "-c",
+        "import multimesh.jax",
+    ]
+    result = run(cmd)
+    if result.returncode != 0:
+        raise Exception(f"smoke test failed for image {image_name}")
 
-if args.save_remote:
-    email = (
-        sp.check_output(["git", "config", "--get", "user.email"])
-        .decode("utf-8")
-        .strip()
+if args.repo:
+    remote_image = f"{args.repo}/{image_name}"
+    os.system(f"docker tag {image_name} {remote_image}")
+
+if args.upload or args.validate or args.sqsh:
+    if args.repo is None:
+        raise Exception("upload to remote repo requested, but no --repo specified")
+    print(f"Pushing to {remote_image}")
+    if not args.dry_run:
+        os.system(f"docker push {remote_image}")
+
+if args.sqsh:
+    remote_read_image = re.compile(r":\d+").sub("", remote_image)
+    result = save_sqsh_image.remote(
+        remote=args.remote, dry_run=args.dry_run, image=remote_read_image
     )
-    if args.framework == "maxtext":
-        save_maxtext_image.remote(args.remote, tag=tag, email=email)
+    print(f"Saved sqsh file to {result} on {args.remote}")
 
 if args.validate:
-    worker_addr = get_worker_addr(args.remote, user_config)
-    remote_config = get_remote_config(args.remote, user_config)
-    job_folder = remote_config.get("job_folder")
-    image_folder = remote_config.get("image_folder")
-    if job_folder is None or image_folder is None:
-        raise Exception(
-            "must specify both a job_folder and base_folder "
-            f"for remote {args.remote} in config.yaml"
-        )
-    data = json.loads(
-        sp.check_output(
-            ["docker", "image", "ls", image_name, "--format", "json"]
-        ).decode("utf-8")
-    )
-    image_id = data["ID"]
-    email = (
-        sp.check_output(["git", "config", "--get", "user.email"])
-        .decode("utf-8")
-        .strip()
-    )
-
-    maxtext_config = repo_config["maxtext"]
-    job_config = maxtext_config["validate"][args.validate]
-
-    result = validate_maxtext_image.remote(
-        worker_addr,
-        email=email,
-        ID=image_id,
-        tag=tag,
+    name = args.tag or args.commit or args.stage
+    tag = None if args.validate == "all" else args.validate
+    # remove port numbers when reading the image name
+    remote_read_image = re.compile(r":\d+").sub("", remote_image)
+    result = run_multimesh_testsuite(
+        name=name,
+        image=remote_read_image,
         dry_run=args.dry_run,
-        skip_save=args.skip_save,
-        job_folder=job_folder,
-        image_folder=image_folder,
-        **job_config,
+        save_image=args.sqsh_before_validate,
+        tag=tag,
+        perf_only=True,
     )
+    print(result.data)

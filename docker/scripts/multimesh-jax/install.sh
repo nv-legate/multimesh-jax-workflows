@@ -10,6 +10,7 @@ export CMAKE_ARGS="-DCPM_xla_SOURCE:PATH=/opt/workspace/xla -DMultiMeshJAX_ROOT:
 export SETUPTOOLS_ENABLE_FEATURES=legacy-editable
 if [ "$editable_flag" = "-e" ]; then
   echo "editable install of multimesh-jax"
+  python setup.py bdist_wheel
 else
   conda run -n legere cmake --install ${BUILD_DIR}
 fi
